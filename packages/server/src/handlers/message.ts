@@ -143,7 +143,14 @@ async function handleSessionJoin(
   await joinSession(sessionId, connectionId);
 
   // Notify CLI about new web connection (with web's public key)
-  await notifyWebConnected(session, publicKey, connectionId);
+  const cliNotified = await notifyWebConnected(session, publicKey, connectionId);
+
+  if (!cliNotified) {
+    // CLI connection is stale, notify web
+    console.log('CLI connection is stale, notifying web');
+    await sendToConnection(connectionId, { type: 'cli:disconnected' });
+    return sendError(connectionId, ErrorCodes.CONNECTION_FAILED, 'CLI not connected');
+  }
 
   // Send session info to web (with CLI's public key for key exchange)
   await sendToConnection(connectionId, {

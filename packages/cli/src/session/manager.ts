@@ -94,22 +94,28 @@ export class SessionManager extends EventEmitter {
     });
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {
-      console.log(chalk.green(`✓ Web client connected: ${data.connectionId}`));
-      this.connectedWebClients.add(data.connectionId);
+      try {
+        console.log(chalk.green(`✓ Web client connected: ${data.connectionId}`));
+        console.log(chalk.gray(`   Public key: ${data.publicKey.substring(0, 20)}...`));
+        this.connectedWebClients.add(data.connectionId);
 
-      // Establish shared encryption key
-      if (!this.encryption.isReady()) {
-        this.encryption.establishSharedKey(data.publicKey);
-        console.log(chalk.green('✓ Encryption established'));
+        // Establish shared encryption key
+        if (!this.encryption.isReady()) {
+          this.encryption.establishSharedKey(data.publicKey);
+          console.log(chalk.green('✓ Encryption established'));
 
-        // Start the terminal now that we have a client
-        this.startTerminal();
-      } else {
-        // Send buffered output to late-joining client
-        this.sendBufferedOutput();
+          // Start the terminal now that we have a client
+          this.startTerminal();
+        } else {
+          // Send buffered output to late-joining client
+          this.sendBufferedOutput();
+        }
+
+        this.emit('web:connected', data.connectionId);
+      } catch (error) {
+        console.error(chalk.red('Error handling web connection:'), error);
+        // Don't crash - just log the error
       }
-
-      this.emit('web:connected', data.connectionId);
     });
 
     this.wsClient.on('web:disconnected', (data: { connectionId: string }) => {
