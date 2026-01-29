@@ -14,10 +14,12 @@ export interface Config {
 
 /**
  * Default configuration
+ * NOTE: Set your server URL via environment variable ALWAYS_CODER_SERVER
+ * or by running: always-coder config set server <your-server-url>
  */
 const DEFAULT_CONFIG: Config = {
-  server: 'wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod',
-  webUrl: 'https://d3eiysbs2sqijx.cloudfront.net',
+  server: '',
+  webUrl: '',
 };
 
 /**
@@ -86,22 +88,40 @@ export function setConfigValue<K extends keyof Config>(key: K, value: Config[K])
 
 /**
  * Get WebSocket endpoint from config or environment
+ * @throws Error if server is not configured
  */
 export function getWSEndpoint(): string {
   // Environment variable takes precedence
   if (process.env.ALWAYS_CODER_SERVER) {
     return process.env.ALWAYS_CODER_SERVER;
   }
-  return loadConfig().server;
+  const server = loadConfig().server;
+  if (!server) {
+    throw new Error(
+      'Server URL not configured. Please set it via:\n' +
+        '  - Environment variable: ALWAYS_CODER_SERVER=wss://your-server-url\n' +
+        '  - Or run: always-coder config set server <your-server-url>'
+    );
+  }
+  return server;
 }
 
 /**
  * Get Web URL from config or environment
+ * @throws Error if web URL is not configured
  */
 export function getWebUrl(): string {
   // Environment variable takes precedence
   if (process.env.ALWAYS_CODER_WEB_URL) {
     return process.env.ALWAYS_CODER_WEB_URL;
   }
-  return loadConfig().webUrl;
+  const webUrl = loadConfig().webUrl;
+  if (!webUrl) {
+    throw new Error(
+      'Web URL not configured. Please set it via:\n' +
+        '  - Environment variable: ALWAYS_CODER_WEB_URL=https://your-web-url\n' +
+        '  - Or run: always-coder config set webUrl <your-web-url>'
+    );
+  }
+  return webUrl;
 }
