@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
  */
 export interface Config {
   server: string;
+  webUrl: string;
   userId?: string;
   authToken?: string;
 }
@@ -15,7 +16,8 @@ export interface Config {
  * Default configuration
  */
 const DEFAULT_CONFIG: Config = {
-  server: 'wss://your-api-id.execute-api.us-east-1.amazonaws.com/prod',
+  server: 'wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod',
+  webUrl: 'https://d3eiysbs2sqijx.cloudfront.net',
 };
 
 /**
@@ -91,4 +93,15 @@ export function getWSEndpoint(): string {
     return process.env.ALWAYS_CODER_SERVER;
   }
   return loadConfig().server;
+}
+
+/**
+ * Get Web URL from config or environment
+ */
+export function getWebUrl(): string {
+  // Environment variable takes precedence
+  if (process.env.ALWAYS_CODER_WEB_URL) {
+    return process.env.ALWAYS_CODER_WEB_URL;
+  }
+  return loadConfig().webUrl;
 }

@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-terminal';
 import type { QRCodeData } from '@always-coder/shared';
+import { getWebUrl as getWebUrlFromConfig } from '../config/index.js';
 
 /**
  * Generate and display QR code in terminal
@@ -28,7 +29,7 @@ export function displayQRCode(data: QRCodeData): void {
  */
 export function getWebUrl(data: QRCodeData): string {
   // Construct URL to web app with session info
-  const baseUrl = process.env.ALWAYS_CODER_WEB_URL || 'http://localhost:3000';
+  const baseUrl = getWebUrlFromConfig();
   return `${baseUrl}/session?id=${data.sessionId}&key=${encodeURIComponent(data.publicKey)}`;
 }
 
