@@ -6,20 +6,24 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 function handleLogout() {
-  document.cookie = 'id_token=; Max-Age=0; path=/';
-  document.cookie = 'access_token=; Max-Age=0; path=/';
-  document.cookie = 'refresh_token=; Max-Age=0; path=/auth';
-  window.location.reload();
+  // Redirect to server-side logout endpoint to clear HttpOnly cookies
+  window.location.href = '/auth/logout';
+}
+
+function getUserEmail(): string {
+  const match = document.cookie.match(/user_email=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
 }
 
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // User is always logged in if they can see this page (Lambda@Edge blocks unauthenticated users)
+  const isLoggedIn = true;
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
-    // Check if user has id_token cookie
-    setIsLoggedIn(document.cookie.includes('id_token='));
+    setUserEmail(getUserEmail());
   }, []);
 
   // Auto-redirect if session params are present in URL
@@ -38,9 +42,12 @@ function HomeContent() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4">
-      {/* Logout button in top right */}
+      {/* User info and logout button in top right */}
       {isLoggedIn && (
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          {userEmail && (
+            <span className="text-sm text-terminal-fg/60">{userEmail}</span>
+          )}
           <button
             onClick={handleLogout}
             className="px-4 py-2 text-sm text-terminal-fg/60 hover:text-terminal-fg border border-terminal-fg/20 rounded-lg transition-colors"

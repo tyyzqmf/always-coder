@@ -16,6 +16,7 @@ const CONFIG = {
   CLIENT_ID: '__CLIENT_ID__',
   COGNITO_DOMAIN: '__COGNITO_DOMAIN__',
   CALLBACK_PATH: '/auth/callback',
+  LOGOUT_PATH: '/auth/logout',
 };
 
 // Static assets that don't require authentication
@@ -248,6 +249,45 @@ function isStaticAsset(uri: string): boolean {
 }
 
 /**
+ * Generate cookie to clear (expire immediately)
+ */
+function generateClearCookie(name: string, path: string = '/'): string {
+  return `${name}=; Max-Age=0; Path=${path}; Secure; SameSite=Lax`;
+}
+
+/**
+ * Generate logout response - clears all auth cookies and redirects to Cognito logout
+ */
+function generateLogoutResponse(request: CloudFrontRequest): CloudFrontRequestResult {
+  const host = request.headers['host']?.[0]?.value || '';
+
+  // Clear all authentication cookies
+  const clearCookies = [
+    { key: 'Set-Cookie', value: generateClearCookie('id_token') },
+    { key: 'Set-Cookie', value: generateClearCookie('access_token') },
+    { key: 'Set-Cookie', value: generateClearCookie('refresh_token', '/auth') },
+    { key: 'Set-Cookie', value: generateClearCookie('logged_in') },
+    { key: 'Set-Cookie', value: generateClearCookie('user_email') },
+  ];
+
+  // Build Cognito logout URL - this will invalidate the Cognito session
+  // and redirect back to our app (which will then redirect to login)
+  const logoutUrl = new URL(`https://${CONFIG.COGNITO_DOMAIN}/logout`);
+  logoutUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
+  logoutUrl.searchParams.set('logout_uri', `https://${host}/`);
+
+  return {
+    status: '302',
+    statusDescription: 'Found',
+    headers: {
+      location: [{ key: 'Location', value: logoutUrl.toString() }],
+      'set-cookie': clearCookies,
+      'cache-control': [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+    },
+  };
+}
+
+/**
  * Generate redirect response to Cognito Hosted UI
  */
 function generateLoginRedirect(request: CloudFrontRequest): CloudFrontRequestResult {
@@ -291,6 +331,11 @@ export async function handler(event: CloudFrontRequestEvent): Promise<CloudFront
   // Skip authentication for callback path
   if (uri === CONFIG.CALLBACK_PATH || uri.startsWith(CONFIG.CALLBACK_PATH + '?')) {
     return request;
+  }
+
+  // Handle logout - clear cookies and redirect to home
+  if (uri === CONFIG.LOGOUT_PATH) {
+    return generateLogoutResponse(request);
   }
 
   // Parse cookies and get id_token

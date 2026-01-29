@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { ConnectionStatus } from '@/stores/session';
 
 interface TerminalToolbarProps {
@@ -9,13 +10,14 @@ interface TerminalToolbarProps {
 }
 
 function handleLogout() {
-  // Clear auth cookies
-  document.cookie = 'id_token=; Max-Age=0; path=/';
-  document.cookie = 'access_token=; Max-Age=0; path=/';
-  document.cookie = 'refresh_token=; Max-Age=0; path=/auth';
+  // Redirect to server-side logout endpoint to clear HttpOnly cookies
+  window.location.href = '/auth/logout';
+}
 
-  // Redirect to home (will trigger Cognito login)
-  window.location.href = '/';
+function getUserEmail(): string {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(/user_email=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
 }
 
 export function TerminalToolbar({
@@ -23,6 +25,12 @@ export function TerminalToolbar({
   connectionStatus,
   onDisconnect,
 }: TerminalToolbarProps) {
+  const [userEmail, setUserEmail] = useState('');
+
+  useEffect(() => {
+    setUserEmail(getUserEmail());
+  }, []);
+
   const statusColors: Record<ConnectionStatus, string> = {
     disconnected: 'bg-terminal-red',
     connecting: 'bg-terminal-yellow animate-pulse',
@@ -57,12 +65,15 @@ export function TerminalToolbar({
         </span>
       </div>
 
-      {/* Connection status and logout */}
+      {/* Connection status, user info and logout */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${statusColors[connectionStatus]}`} />
           <span className="text-sm text-terminal-fg/60">{statusText[connectionStatus]}</span>
         </div>
+        {userEmail && (
+          <span className="text-sm text-terminal-fg/40">{userEmail}</span>
+        )}
         <button
           onClick={handleLogout}
           className="text-sm text-terminal-fg/60 hover:text-terminal-fg transition-colors"

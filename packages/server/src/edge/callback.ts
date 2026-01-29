@@ -88,6 +88,20 @@ async function exchangeCodeForTokens(
 }
 
 /**
+ * Parse JWT payload without verification (for extracting user info)
+ */
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse state parameter to get return URL
  */
 function parseState(state: string | undefined): StatePayload {
@@ -197,10 +211,17 @@ export async function handler(event: CloudFrontRequestEvent): Promise<CloudFront
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
 
+    // Parse user info from id_token
+    const userInfo = parseJwtPayload(tokens.id_token);
+    const userEmail = (userInfo?.email as string) || '';
+
     // Build cookie headers
     const cookieHeaders = [
       { key: 'Set-Cookie', value: generateCookie('id_token', tokens.id_token, tokens.expires_in) },
       { key: 'Set-Cookie', value: generateCookie('access_token', tokens.access_token, tokens.expires_in) },
+      // Non-HttpOnly cookies for JS to read user info
+      { key: 'Set-Cookie', value: generateCookie('logged_in', 'true', tokens.expires_in, { httpOnly: false }) },
+      { key: 'Set-Cookie', value: generateCookie('user_email', encodeURIComponent(userEmail), tokens.expires_in, { httpOnly: false }) },
     ];
 
     // Add refresh token if present (with restricted path)

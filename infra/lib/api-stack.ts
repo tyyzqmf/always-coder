@@ -187,11 +187,15 @@ export class ApiStack extends cdk.Stack {
     messagesTable.grantReadWriteData(messageHandler);
 
     // ==================== WebSocket Authorizer ====================
+    // Note: We don't specify identitySource to allow anonymous access.
+    // When identitySource is specified and the value is missing, API Gateway
+    // returns 401 without invoking the authorizer. By omitting it, the
+    // authorizer is always invoked and can handle anonymous access.
     const wsAuthorizer = new apigatewayv2Authorizers.WebSocketLambdaAuthorizer(
       'WsAuthorizer',
       authorizerHandler,
       {
-        identitySource: ['route.request.querystring.token'],
+        identitySource: [],
       }
     );
 
