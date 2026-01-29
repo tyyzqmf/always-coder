@@ -3,6 +3,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -83,6 +84,19 @@ export class AuthStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(5),
       logRetention: logs.RetentionDays.ONE_WEEK,
       description: 'Lambda@Edge function for OAuth callback handling',
+    });
+
+    // Store Lambda version ARNs in SSM Parameters to avoid cross-stack export issues
+    new ssm.StringParameter(this, 'AuthEdgeFunctionVersionArn', {
+      parameterName: `/always-coder/${stageName}/auth-edge-function-version-arn`,
+      stringValue: this.authEdgeFunction.currentVersion.functionArn,
+      description: 'Auth Lambda@Edge function version ARN',
+    });
+
+    new ssm.StringParameter(this, 'CallbackEdgeFunctionVersionArn', {
+      parameterName: `/always-coder/${stageName}/callback-edge-function-version-arn`,
+      stringValue: this.callbackEdgeFunction.currentVersion.functionArn,
+      description: 'Callback Lambda@Edge function version ARN',
     });
 
     // Outputs

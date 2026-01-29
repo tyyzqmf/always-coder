@@ -3,7 +3,6 @@ import { Construct } from 'constructs';
 import { DatabaseStack } from './database-stack';
 import { ApiStack } from './api-stack';
 import { WebStack } from './web-stack';
-import { AuthStack } from './auth-stack';
 
 export interface MainStackProps extends cdk.StackProps {
   stageName?: string;
@@ -14,7 +13,6 @@ export class AlwaysCoderInfrastructure extends Construct {
   public readonly databaseStack: DatabaseStack;
   public readonly apiStack: ApiStack;
   public readonly webStack: WebStack;
-  public readonly authStack?: AuthStack;
 
   constructor(scope: Construct, id: string, props: MainStackProps = {}) {
     super(scope, id);
@@ -43,37 +41,21 @@ export class AlwaysCoderInfrastructure extends Construct {
     // Add dependency
     this.apiStack.addDependency(this.databaseStack);
 
-    // Create Auth Stack (Lambda@Edge for Cognito authentication)
-    if (enableAuth) {
-      this.authStack = new AuthStack(scope, `AlwaysCoder-${stageName}-Auth`, {
-        stageName,
-        env,
-        description: `Always Coder ${stageName} - Lambda@Edge Authentication`,
-        cognitoRegion: env?.region || 'us-east-1',
-        userPoolId: this.apiStack.userPool.userPoolId,
-        userPoolClientId: this.apiStack.userPoolClient.userPoolClientId,
-        cognitoDomain: `always-coder-${stageName}-${env?.account || 'unknown'}.auth.${env?.region || 'us-east-1'}.amazoncognito.com`,
-      });
-
-      this.authStack.addDependency(this.apiStack);
-    }
-
-    // Create Web Stack
+    // Create Web Stack (Lambda@Edge is now created inline to avoid cross-stack export issues)
     this.webStack = new WebStack(scope, `AlwaysCoder-${stageName}-Web`, {
       stageName,
       env,
-      description: `Always Coder ${stageName} - Web Hosting (S3 + CloudFront)`,
+      description: `Always Coder ${stageName} - Web Hosting (S3 + CloudFront + Lambda@Edge)`,
       wsEndpoint: this.apiStack.webSocketStage.url,
       userPoolId: this.apiStack.userPool.userPoolId,
       userPoolClientId: this.apiStack.userPoolClient.userPoolClientId,
-      authEdgeFunction: this.authStack?.authEdgeFunction,
-      callbackEdgeFunction: this.authStack?.callbackEdgeFunction,
+      // Auth configuration for Lambda@Edge (now created inline in WebStack)
+      enableAuth,
+      cognitoRegion: env?.region || 'us-east-1',
+      cognitoDomain: `always-coder-${stageName}-${env?.account || 'unknown'}.auth.${env?.region || 'us-east-1'}.amazoncognito.com`,
     });
 
     // Add dependency
     this.webStack.addDependency(this.apiStack);
-    if (this.authStack) {
-      this.webStack.addDependency(this.authStack);
-    }
   }
 }
