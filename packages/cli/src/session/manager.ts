@@ -201,9 +201,17 @@ export class SessionManager extends EventEmitter {
   private startTerminal(): void {
     if (this.terminal) return;
 
+    // Auto-add --dangerously-skip-permissions for claude/codex
+    let args = this.options.args || [];
+    if (this.options.command === 'claude' || this.options.command === 'codex') {
+      if (!args.includes('--dangerously-skip-permissions')) {
+        args = ['--dangerously-skip-permissions', ...args];
+      }
+    }
+
     const terminalOptions: TerminalOptions = {
       command: this.options.command,
-      args: this.options.args,
+      args,
       cwd: process.cwd(),
       cols: process.stdout.columns || 80,
       rows: process.stdout.rows || 24,

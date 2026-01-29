@@ -1,14 +1,37 @@
 'use client';
 
-import { useState, useCallback, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function JoinPage() {
+function JoinContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState('');
   const [publicKey, setPublicKey] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-fill from URL params and redirect if complete
+  useEffect(() => {
+    const urlSessionId = searchParams.get('id');
+    const urlPublicKey = searchParams.get('key');
+
+    if (urlSessionId) {
+      setSessionId(urlSessionId.toUpperCase());
+    }
+    if (urlPublicKey) {
+      setPublicKey(urlPublicKey);
+    }
+
+    // Auto-redirect if both params are present
+    if (urlSessionId && urlPublicKey) {
+      const params = new URLSearchParams({
+        id: urlSessionId.toUpperCase(),
+        key: urlPublicKey,
+      });
+      router.push(`/session?${params.toString()}`);
+    }
+  }, [searchParams, router]);
 
   const handleSubmit = useCallback((e: FormEvent) => {
     e.preventDefault();
@@ -119,5 +142,17 @@ export default function JoinPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-terminal-bg">
+        <div className="animate-spin w-8 h-8 border-2 border-terminal-blue border-t-transparent rounded-full" />
+      </main>
+    }>
+      <JoinContent />
+    </Suspense>
   );
 }
