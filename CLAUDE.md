@@ -83,6 +83,10 @@ cd infra && pnpm cdk synth          # Generate CloudFormation templates
 - Web paths use `@/*` alias for `src/*`
 - Lambda@Edge functions bundled separately via esbuild (CommonJS output)
 
+## Development Workflow
+
+After making code changes, you must redeploy and verify the changes work correctly before declaring the task complete. Do not consider a task finished until deployment succeeds and functionality is confirmed.
+
 ## Environment Variables
 
 - `ALWAYS_CODER_SERVER` - WebSocket endpoint URL
