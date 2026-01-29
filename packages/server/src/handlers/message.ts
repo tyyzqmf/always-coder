@@ -23,6 +23,15 @@ import {
 import { cacheMessage, getRecentMessages } from '../utils/dynamodb.js';
 
 /**
+ * Authorizer context from Lambda authorizer
+ */
+interface AuthorizerContext {
+  userId: string;
+  email: string;
+  isAuthenticated: string;
+}
+
+/**
  * $default handler - Routes and relays WebSocket messages
  *
  * Server does NOT decrypt messages - it only routes encrypted envelopes
@@ -31,6 +40,10 @@ import { cacheMessage, getRecentMessages } from '../utils/dynamodb.js';
 export const handler: APIGatewayProxyHandler = async (event): Promise<APIGatewayProxyResult> => {
   const connectionId = event.requestContext.connectionId!;
   const { domainName, stage } = event.requestContext;
+
+  // Extract authorizer context
+  const authorizer = event.requestContext.authorizer as AuthorizerContext | undefined;
+  const userId = authorizer?.userId || 'anonymous';
 
   // Initialize API client for sending messages
   const endpoint = `https://${domainName}/${stage}`;
@@ -44,17 +57,17 @@ export const handler: APIGatewayProxyHandler = async (event): Promise<APIGateway
     return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON');
   }
 
-  console.log('Message received:', { connectionId, type: (body as Record<string, unknown>).type });
+  console.log('Message received:', { connectionId, type: (body as Record<string, unknown>).type, userId });
 
   try {
     // Handle session creation (from CLI)
     if (isSessionCreateRequest(body)) {
-      return await handleSessionCreate(connectionId, body.sessionId, body.publicKey, endpoint);
+      return await handleSessionCreate(connectionId, body.sessionId, body.publicKey, endpoint, userId);
     }
 
     // Handle session join (from Web)
     if (isSessionJoinRequest(body)) {
-      return await handleSessionJoin(connectionId, body.sessionId, body.publicKey);
+      return await handleSessionJoin(connectionId, body.sessionId, body.publicKey, userId);
     }
 
     // Handle encrypted messages (relay without decryption)
@@ -88,9 +101,10 @@ async function handleSessionCreate(
   connectionId: string,
   sessionId: string,
   publicKey: string,
-  wsEndpoint: string
+  wsEndpoint: string,
+  userId: string
 ): Promise<APIGatewayProxyResult> {
-  console.log('Creating session:', { sessionId, connectionId });
+  console.log('Creating session:', { sessionId, connectionId, userId });
 
   // Check if session already exists
   const existing = await getSession(sessionId);
@@ -98,11 +112,11 @@ async function handleSessionCreate(
     return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Session already exists');
   }
 
-  // Create the session
-  await createSession(sessionId, connectionId, publicKey);
+  // Create the session with userId
+  await createSession(sessionId, connectionId, publicKey, userId);
 
-  // Register the CLI connection
-  await registerConnection(connectionId, sessionId, 'cli', publicKey);
+  // Register the CLI connection with userId
+  await registerConnection(connectionId, sessionId, 'cli', publicKey, userId);
 
   // Send confirmation to CLI
   await sendToConnection(connectionId, {
@@ -120,9 +134,10 @@ async function handleSessionCreate(
 async function handleSessionJoin(
   connectionId: string,
   sessionId: string,
-  publicKey: string
+  publicKey: string,
+  userId: string
 ): Promise<APIGatewayProxyResult> {
-  console.log('Joining session:', { sessionId, connectionId });
+  console.log('Joining session:', { sessionId, connectionId, userId });
 
   // Check if session is active
   const isActive = await isSessionActive(sessionId);
@@ -136,8 +151,8 @@ async function handleSessionJoin(
     return sendError(connectionId, ErrorCodes.SESSION_NOT_FOUND, 'Session not found');
   }
 
-  // Register the web connection
-  await registerConnection(connectionId, sessionId, 'web', publicKey);
+  // Register the web connection with userId
+  await registerConnection(connectionId, sessionId, 'web', publicKey, userId);
 
   // Add web connection to session
   await joinSession(sessionId, connectionId);

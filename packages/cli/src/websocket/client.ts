@@ -22,19 +22,45 @@ export interface WebSocketClientEvents {
 }
 
 /**
+ * WebSocket client options
+ */
+export interface WebSocketClientOptions {
+  endpoint: string;
+  authToken?: string;
+}
+
+/**
  * WebSocket client for CLI
  */
 export class WebSocketClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private endpoint: string;
+  private authToken?: string;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 10;
   private pingInterval: NodeJS.Timeout | null = null;
   private isClosing: boolean = false;
 
-  constructor(endpoint: string) {
+  constructor(options: WebSocketClientOptions | string) {
     super();
-    this.endpoint = endpoint;
+    if (typeof options === 'string') {
+      // Backward compatibility: accept endpoint string
+      this.endpoint = options;
+    } else {
+      this.endpoint = options.endpoint;
+      this.authToken = options.authToken;
+    }
+  }
+
+  /**
+   * Get the connection URL with auth token if available
+   */
+  private getConnectionUrl(): string {
+    if (!this.authToken) {
+      return this.endpoint;
+    }
+    const separator = this.endpoint.includes('?') ? '&' : '?';
+    return `${this.endpoint}${separator}token=${encodeURIComponent(this.authToken)}`;
   }
 
   /**
@@ -43,7 +69,8 @@ export class WebSocketClient extends EventEmitter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.endpoint);
+        const url = this.getConnectionUrl();
+        this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
           console.log('WebSocket connected');

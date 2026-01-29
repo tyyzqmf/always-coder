@@ -8,6 +8,16 @@ interface TerminalToolbarProps {
   onDisconnect?: () => void;
 }
 
+function handleLogout() {
+  // Clear auth cookies
+  document.cookie = 'id_token=; Max-Age=0; path=/';
+  document.cookie = 'access_token=; Max-Age=0; path=/';
+  document.cookie = 'refresh_token=; Max-Age=0; path=/auth';
+
+  // Redirect to home (will trigger Cognito login)
+  window.location.href = '/';
+}
+
 export function TerminalToolbar({
   sessionId,
   connectionStatus,
@@ -47,10 +57,19 @@ export function TerminalToolbar({
         </span>
       </div>
 
-      {/* Connection status */}
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${statusColors[connectionStatus]}`} />
-        <span className="text-sm text-terminal-fg/60">{statusText[connectionStatus]}</span>
+      {/* Connection status and logout */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${statusColors[connectionStatus]}`} />
+          <span className="text-sm text-terminal-fg/60">{statusText[connectionStatus]}</span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="text-sm text-terminal-fg/60 hover:text-terminal-fg transition-colors"
+          title="Logout"
+        >
+          Logout
+        </button>
       </div>
     </div>
   );

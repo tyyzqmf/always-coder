@@ -1,8 +1,55 @@
-import Link from 'next/link';
+'use client';
 
-export default function HomePage() {
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Suspense } from 'react';
+
+function handleLogout() {
+  document.cookie = 'id_token=; Max-Age=0; path=/';
+  document.cookie = 'access_token=; Max-Age=0; path=/';
+  document.cookie = 'refresh_token=; Max-Age=0; path=/auth';
+  window.location.reload();
+}
+
+function HomeContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check if user has id_token cookie
+    setIsLoggedIn(document.cookie.includes('id_token='));
+  }, []);
+
+  // Auto-redirect if session params are present in URL
+  useEffect(() => {
+    const sessionId = searchParams.get('id');
+    const publicKey = searchParams.get('key');
+
+    if (sessionId && publicKey) {
+      const params = new URLSearchParams({
+        id: sessionId.toUpperCase(),
+        key: publicKey,
+      });
+      router.push(`/session?${params.toString()}`);
+    }
+  }, [searchParams, router]);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4">
+      {/* Logout button in top right */}
+      {isLoggedIn && (
+        <div className="absolute top-4 right-4">
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm text-terminal-fg/60 hover:text-terminal-fg border border-terminal-fg/20 rounded-lg transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
       <div className="max-w-2xl w-full text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-terminal-blue via-terminal-magenta to-terminal-cyan bg-clip-text text-transparent">
           Always Coder
@@ -16,7 +63,7 @@ export default function HomePage() {
             href="/scan"
             className="block w-full py-4 px-6 bg-terminal-blue hover:bg-terminal-blue/80 text-white rounded-lg font-medium transition-colors"
           >
-            📱 Scan QR Code to Connect
+            Scan QR Code to Connect
           </Link>
 
           <div className="text-terminal-fg/50 text-sm">or</div>
@@ -25,7 +72,7 @@ export default function HomePage() {
             href="/join"
             className="block w-full py-4 px-6 bg-terminal-black/50 hover:bg-terminal-black/70 border border-terminal-fg/20 text-terminal-fg rounded-lg font-medium transition-colors"
           >
-            ⌨️ Enter Session ID Manually
+            Enter Session ID Manually
           </Link>
         </div>
 
@@ -37,5 +84,17 @@ export default function HomePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="animate-spin w-8 h-8 border-2 border-terminal-blue border-t-transparent rounded-full" />
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -4,7 +4,7 @@ import { WebSocketClient } from '../websocket/client.js';
 import { EncryptionManager } from '../crypto/encryption.js';
 import { Terminal, type TerminalOptions } from '../pty/terminal.js';
 import { displayQRCode } from '../qrcode/generator.js';
-import { getWSEndpoint } from '../config/index.js';
+import { getWSEndpoint, loadConfig } from '../config/index.js';
 import chalk from 'chalk';
 
 /**
@@ -52,12 +52,20 @@ export class SessionManager extends EventEmitter {
    */
   async start(): Promise<void> {
     const wsEndpoint = this.options.serverUrl || getWSEndpoint();
+    const config = loadConfig();
+    const authToken = config.authToken;
 
     console.log(chalk.blue('🚀 Starting Always Coder session...'));
     console.log(chalk.gray(`   Server: ${wsEndpoint}`));
+    if (authToken) {
+      console.log(chalk.gray('   Auth: Using configured token'));
+    }
 
-    // Connect to WebSocket server
-    this.wsClient = new WebSocketClient(wsEndpoint);
+    // Connect to WebSocket server with optional auth token
+    this.wsClient = new WebSocketClient({
+      endpoint: wsEndpoint,
+      authToken,
+    });
     this.setupWebSocketHandlers();
 
     try {

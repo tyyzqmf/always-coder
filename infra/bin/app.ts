@@ -18,6 +18,7 @@ const env = {
 new AlwaysCoderInfrastructure(app, `AlwaysCoder-${stageName}`, {
   stageName,
   env,
+  enableAuth: true,
 });
 
 // Add tags to all resources

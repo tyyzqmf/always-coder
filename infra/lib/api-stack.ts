@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as apigatewayv2Authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -102,6 +103,27 @@ export class ApiStack extends cdk.Stack {
 
     // ==================== Lambda Functions ====================
 
+    // Authorizer handler
+    const authorizerHandler = new nodejs.NodejsFunction(this, 'AuthorizerHandler', {
+      functionName: `always-coder-${stageName}-authorizer`,
+      entry: path.join(lambdaDir, 'authorizer.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        COGNITO_REGION: this.region,
+        USER_POOL_ID: this.userPool.userPoolId,
+        CLIENT_ID: this.userPoolClient.userPoolClientId,
+      },
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        externalModules: [],
+      },
+      logRetention: logs.RetentionDays.ONE_WEEK,
+    });
+
     // Connect handler
     const connectHandler = new nodejs.NodejsFunction(this, 'ConnectHandler', {
       functionName: `always-coder-${stageName}-connect`,
@@ -164,6 +186,15 @@ export class ApiStack extends cdk.Stack {
 
     messagesTable.grantReadWriteData(messageHandler);
 
+    // ==================== WebSocket Authorizer ====================
+    const wsAuthorizer = new apigatewayv2Authorizers.WebSocketLambdaAuthorizer(
+      'WsAuthorizer',
+      authorizerHandler,
+      {
+        identitySource: ['route.request.querystring.token'],
+      }
+    );
+
     // ==================== WebSocket API ====================
     this.webSocketApi = new apigatewayv2.WebSocketApi(this, 'WebSocketApi', {
       apiName: `always-coder-${stageName}-ws`,
@@ -173,6 +204,7 @@ export class ApiStack extends cdk.Stack {
           'ConnectIntegration',
           connectHandler
         ),
+        authorizer: wsAuthorizer,
       },
       disconnectRouteOptions: {
         integration: new apigatewayv2Integrations.WebSocketLambdaIntegration(
