@@ -14,12 +14,11 @@ export interface Config {
 
 /**
  * Default configuration
- * NOTE: Set your server URL via environment variable ALWAYS_CODER_SERVER
- * or by running: always-coder config set server <your-server-url>
+ * These are the production endpoints for Always Coder
  */
 const DEFAULT_CONFIG: Config = {
-  server: '',
-  webUrl: '',
+  server: 'wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod',
+  webUrl: 'https://d3eiysbs2sqijx.cloudfront.net',
 };
 
 /**
