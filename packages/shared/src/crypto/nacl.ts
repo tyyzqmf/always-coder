@@ -1,5 +1,7 @@
 import nacl from 'tweetnacl';
-import { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } from 'tweetnacl-util';
+import util from 'tweetnacl-util';
+
+const { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } = util;
 import type { EncryptedEnvelope, Message } from '../types/message.js';
 
 /**
