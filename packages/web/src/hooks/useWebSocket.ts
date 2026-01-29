@@ -16,6 +16,9 @@ interface UseWebSocketOptions {
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const wsRef = useRef<WebSocketManager | null>(null);
   const isConnectedRef = useRef(false);
+  // Store options in ref to avoid recreating connect callback
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const connect = useCallback(async () => {
     if (wsRef.current?.isConnected()) {
@@ -25,20 +28,20 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     const ws = new WebSocketManager(WS_ENDPOINT, {
       onOpen: () => {
         isConnectedRef.current = true;
-        options.onStatusChange?.(true);
+        optionsRef.current.onStatusChange?.(true);
       },
       onClose: () => {
         isConnectedRef.current = false;
-        options.onStatusChange?.(false);
+        optionsRef.current.onStatusChange?.(false);
       },
-      onSessionJoined: options.onSessionJoined,
-      onEncrypted: options.onEncrypted,
-      onCliDisconnected: options.onCliDisconnected,
+      onSessionJoined: (data) => optionsRef.current.onSessionJoined?.(data),
+      onEncrypted: (envelope) => optionsRef.current.onEncrypted?.(envelope),
+      onCliDisconnected: () => optionsRef.current.onCliDisconnected?.(),
     });
 
     wsRef.current = ws;
     await ws.connect();
-  }, [options]);
+  }, []);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();

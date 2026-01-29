@@ -61,10 +61,12 @@ export function useSession(options: UseSessionOptions = {}) {
   }, [setError]);
 
   const handleStatusChange = useCallback((connected: boolean) => {
-    if (!connected && connectionStatus === 'connected') {
+    // Use getState() to avoid dependency on connectionStatus which causes infinite loops
+    const currentStatus = useSessionStore.getState().connectionStatus;
+    if (!connected && currentStatus === 'connected') {
       setConnectionStatus('disconnected');
     }
-  }, [connectionStatus, setConnectionStatus]);
+  }, [setConnectionStatus]);
 
   const { connect, disconnect, joinSession, sendEncrypted } = useWebSocket({
     onSessionJoined: handleSessionJoined,
