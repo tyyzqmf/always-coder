@@ -34,9 +34,10 @@ export default function JoinPage() {
 
     // Navigate to session page
     const params = new URLSearchParams({
+      id: trimmedSessionId,
       key: trimmedPublicKey,
     });
-    router.push(`/session/${trimmedSessionId}?${params.toString()}`);
+    router.push(`/session?${params.toString()}`);
   }, [sessionId, publicKey, router]);
 
   return (

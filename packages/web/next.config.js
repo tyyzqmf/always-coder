@@ -1,9 +1,14 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  transpilePackages: ['@always-coder/shared'],
-  experimental: {
-    serverComponentsExternalPackages: ['tweetnacl', 'tweetnacl-util'],
+  output: 'export',
+  images: {
+    unoptimized: true,
+  },
+  webpack: (config) => {
+    config.resolve.alias['@always-coder/shared'] = path.resolve(__dirname, '../shared/dist');
+    return config;
   },
 };
 

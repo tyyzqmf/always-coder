@@ -29,7 +29,7 @@ export function displayQRCode(data: QRCodeData): void {
 export function getWebUrl(data: QRCodeData): string {
   // Construct URL to web app with session info
   const baseUrl = process.env.ALWAYS_CODER_WEB_URL || 'http://localhost:3000';
-  return `${baseUrl}/session/${data.sessionId}?key=${encodeURIComponent(data.publicKey)}`;
+  return `${baseUrl}/session?id=${data.sessionId}&key=${encodeURIComponent(data.publicKey)}`;
 }
 
 /**

@@ -1,26 +1,30 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { Terminal } from '@/components/Terminal/Terminal';
+import { Suspense, useEffect, useCallback, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { TerminalToolbar } from '@/components/Terminal/TerminalToolbar';
 import { useSession } from '@/hooks/useSession';
 import { useSessionStore } from '@/stores/session';
 
-export default function SessionPage() {
-  const params = useParams();
+// Dynamic import Terminal to avoid SSR issues with xterm.js
+const Terminal = dynamic(
+  () => import('@/components/Terminal/Terminal').then((mod) => mod.Terminal),
+  { ssr: false, loading: () => <div className="flex-1 bg-terminal-bg" /> }
+);
+
+function SessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const sessionId = params.id as string;
+  const sessionId = searchParams.get('id');
   const publicKey = searchParams.get('key');
 
   const { connectionStatus, errorMessage } = useSessionStore();
-  const terminalRef = useRef<{ write: (data: string) => void } | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   // Handle terminal output from CLI
   const handleTerminalOutput = useCallback((data: string) => {
-    // Access terminal via window
     const handle = (window as unknown as Record<string, unknown>).__terminalHandle as { write: (data: string) => void } | undefined;
     handle?.write(data);
   }, []);
@@ -37,17 +41,22 @@ export default function SessionPage() {
 
   // Connect to session on mount
   useEffect(() => {
-    if (!publicKey) {
+    if (!sessionId || !publicKey) {
       router.push('/join');
       return;
     }
 
-    connectToSession(sessionId);
+    if (!initialized) {
+      setInitialized(true);
+      connectToSession(sessionId);
+    }
 
     return () => {
-      disconnectSession();
+      if (initialized) {
+        disconnectSession();
+      }
     };
-  }, [sessionId, publicKey, connectToSession, disconnectSession, router]);
+  }, [sessionId, publicKey, initialized, connectToSession, disconnectSession, router]);
 
   // Handle terminal input
   const handleTerminalData = useCallback((data: string) => {
@@ -64,6 +73,18 @@ export default function SessionPage() {
     disconnectSession();
     router.push('/');
   }, [disconnectSession, router]);
+
+  // Validate params
+  if (!sessionId || !publicKey) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-terminal-bg">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-terminal-blue border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-terminal-fg/60">Redirecting...</p>
+        </div>
+      </main>
+    );
+  }
 
   // Show error state
   if (errorMessage) {
@@ -87,7 +108,7 @@ export default function SessionPage() {
   }
 
   // Show connecting state
-  if (connectionStatus === 'connecting') {
+  if (connectionStatus === 'connecting' || connectionStatus === 'disconnected') {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-terminal-bg">
         <div className="text-center">
@@ -112,5 +133,24 @@ export default function SessionPage() {
         />
       </div>
     </main>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-terminal-bg">
+      <div className="text-center">
+        <div className="animate-spin w-8 h-8 border-2 border-terminal-blue border-t-transparent rounded-full mx-auto mb-4" />
+        <p className="text-terminal-fg/60">Loading...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <SessionContent />
+    </Suspense>
   );
 }

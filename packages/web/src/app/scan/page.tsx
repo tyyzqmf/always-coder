@@ -3,7 +3,13 @@
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { QRScanner } from '@/components/QRScanner/QRScanner';
+import dynamic from 'next/dynamic';
+
+// Dynamic import QRScanner to avoid SSR issues with html5-qrcode
+const QRScanner = dynamic(
+  () => import('@/components/QRScanner/QRScanner').then((mod) => mod.QRScanner),
+  { ssr: false, loading: () => <div className="w-full max-w-sm h-80 bg-terminal-black/50 rounded-xl animate-pulse" /> }
+);
 
 interface QRCodeData {
   sessionId: string;
@@ -17,9 +23,10 @@ export default function ScanPage() {
   const handleScan = useCallback((data: QRCodeData) => {
     // Navigate to session page with the scanned data
     const params = new URLSearchParams({
+      id: data.sessionId,
       key: data.publicKey,
     });
-    router.push(`/session/${data.sessionId}?${params.toString()}`);
+    router.push(`/session?${params.toString()}`);
   }, [router]);
 
   const handleError = useCallback((error: string) => {
