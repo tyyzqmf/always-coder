@@ -1,0 +1,4 @@
+{
+  "server": "wss://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod",
+  "webUrl": "https://your-cloudfront-distribution.cloudfront.net"
+}

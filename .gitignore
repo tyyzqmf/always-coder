@@ -42,3 +42,6 @@ bun.lockb
 # Misc
 .cache/
 tmp/
+
+# Always Coder local config
+packages/cli/config.local.json

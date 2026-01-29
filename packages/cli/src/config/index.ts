@@ -1,6 +1,7 @@
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 /**
  * Configuration interface
@@ -13,13 +14,28 @@ export interface Config {
 }
 
 /**
- * Default configuration
- * These are the production endpoints for Always Coder
+ * Default configuration (empty - must be configured by user)
  */
 const DEFAULT_CONFIG: Config = {
-  server: 'wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod',
-  webUrl: 'https://d3eiysbs2sqijx.cloudfront.net',
+  server: '',
+  webUrl: '',
 };
+
+/**
+ * Get the CLI package directory
+ */
+function getCliDir(): string {
+  // Get directory relative to this file (src/config/index.ts -> packages/cli)
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  return join(currentDir, '..', '..');
+}
+
+/**
+ * Get path to local config file (for development)
+ */
+function getLocalConfigPath(): string {
+  return join(getCliDir(), 'config.local.json');
+}
 
 /**
  * Get the config directory path
@@ -41,10 +57,23 @@ export function getConfigPath(): string {
 
 /**
  * Load configuration from file
+ * Priority: 1. Local config (config.local.json) 2. User config (~/.always-coder/config.json)
  */
 export function loadConfig(): Config {
-  const configPath = getConfigPath();
+  // Try local config first (for development)
+  const localConfigPath = getLocalConfigPath();
+  if (existsSync(localConfigPath)) {
+    try {
+      const content = readFileSync(localConfigPath, 'utf-8');
+      const config = JSON.parse(content);
+      return { ...DEFAULT_CONFIG, ...config };
+    } catch (error) {
+      console.warn('Failed to load local config:', error);
+    }
+  }
 
+  // Fall back to user config
+  const configPath = getConfigPath();
   if (!existsSync(configPath)) {
     return { ...DEFAULT_CONFIG };
   }
@@ -54,7 +83,7 @@ export function loadConfig(): Config {
     const config = JSON.parse(content);
     return { ...DEFAULT_CONFIG, ...config };
   } catch (error) {
-    console.warn('Failed to load config, using defaults:', error);
+    console.warn('Failed to load config:', error);
     return { ...DEFAULT_CONFIG };
   }
 }
