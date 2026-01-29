@@ -22,6 +22,7 @@ export class ApiStack extends cdk.Stack {
   public readonly webSocketStage: apigatewayv2.WebSocketStage;
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
+  public readonly userPoolDomain: cognito.UserPoolDomain;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -55,12 +56,20 @@ export class ApiStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Add Cognito Hosted UI Domain
+    this.userPoolDomain = this.userPool.addDomain('CognitoDomain', {
+      cognitoDomain: {
+        domainPrefix: `always-coder-${stageName}-${this.account}`,
+      },
+    });
+
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: `always-coder-${stageName}-web`,
       authFlows: {
         userPassword: true,
         userSrp: true,
       },
+      generateSecret: false, // Lambda@Edge doesn't support secrets well
       oAuth: {
         flows: {
           authorizationCodeGrant: true,
@@ -72,7 +81,10 @@ export class ApiStack extends cdk.Stack {
         ],
         callbackUrls: [
           'http://localhost:3000/api/auth/callback/cognito',
-          // Add production callback URLs here
+          'http://localhost:3000/auth/callback',
+        ],
+        logoutUrls: [
+          'http://localhost:3000',
         ],
       },
       preventUserExistenceErrors: true,
@@ -213,6 +225,17 @@ export class ApiStack extends cdk.Stack {
       value: this.userPoolClient.userPoolClientId,
       description: 'Cognito User Pool Client ID',
       exportName: `always-coder-${stageName}-user-pool-client-id`,
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolDomainName', {
+      value: this.userPoolDomain.domainName,
+      description: 'Cognito User Pool Domain',
+      exportName: `always-coder-${stageName}-user-pool-domain`,
+    });
+
+    new cdk.CfnOutput(this, 'CognitoHostedUIUrl', {
+      value: `https://${this.userPoolDomain.domainName}.auth.${this.region}.amazoncognito.com`,
+      description: 'Cognito Hosted UI URL',
     });
   }
 }

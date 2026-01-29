@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && pnpm build:edge",
+    "build:edge": "node scripts/build-edge.mjs",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.131",
     "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"
   }
