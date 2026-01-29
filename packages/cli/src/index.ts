@@ -3,6 +3,13 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { SessionManager } from './session/manager.js';
 import { loadConfig, saveConfig, getConfigValue, setConfigValue } from './config/index.js';
+import {
+  startDaemon,
+  listDaemonSessions,
+  stopDaemonSession,
+  cleanupStaleSessions,
+  isProcessRunning,
+} from './daemon/index.js';
 
 const program = new Command();
 
@@ -16,22 +23,57 @@ program
   .argument('[command]', 'Command to run (default: claude)')
   .argument('[args...]', 'Arguments to pass to the command')
   .option('-s, --server <url>', 'WebSocket server URL')
-  .action(async (command: string | undefined, args: string[], options: { server?: string }) => {
+  .option('-d, --daemon', 'Run in background (daemon mode)')
+  .option('--daemon-child', 'Internal flag for daemon child process')
+  .action(async (command: string | undefined, args: string[], options: { server?: string; daemon?: boolean; daemonChild?: boolean }) => {
     const cmd = command || 'claude';
 
-    console.log(chalk.cyan('╔═══════════════════════════════════════════════════════════╗'));
-    console.log(chalk.cyan('║           Always Coder - Remote Terminal Access           ║'));
-    console.log(chalk.cyan('╚═══════════════════════════════════════════════════════════╝'));
+    // Check if this is a daemon child process
+    const isDaemonChild = options.daemonChild || process.env.ALWAYS_CODER_DAEMON === 'true';
+    const logFile = process.env.ALWAYS_CODER_LOG_FILE;
+
+    // If --daemon flag is set, start a daemon and exit
+    if (options.daemon && !isDaemonChild) {
+      console.log(chalk.cyan('╔═══════════════════════════════════════════════════════════╗'));
+      console.log(chalk.cyan('║           Always Coder - Daemon Mode                      ║'));
+      console.log(chalk.cyan('╚═══════════════════════════════════════════════════════════╝'));
+
+      try {
+        const result = startDaemon(cmd, args, options.server);
+        console.log(chalk.green('✓ Daemon started'));
+        console.log(chalk.gray(`   PID: ${result.pid}`));
+        console.log(chalk.gray(`   Log: ${result.logFile}`));
+        console.log('');
+        console.log(chalk.yellow('Session is starting in background...'));
+        console.log(chalk.gray('Run "always sessions" to see active sessions and web URLs.'));
+        console.log(chalk.gray('Run "always stop <session-id>" to stop a session.'));
+        process.exit(0);
+      } catch (error) {
+        console.error(chalk.red('Failed to start daemon:'), error);
+        process.exit(1);
+      }
+    }
+
+    // Normal session startup (interactive or daemon child)
+    if (!isDaemonChild) {
+      console.log(chalk.cyan('╔═══════════════════════════════════════════════════════════╗'));
+      console.log(chalk.cyan('║           Always Coder - Remote Terminal Access           ║'));
+      console.log(chalk.cyan('╚═══════════════════════════════════════════════════════════╝'));
+    }
 
     const session = new SessionManager({
       command: cmd,
       args: args.length > 0 ? args : undefined,
       serverUrl: options.server,
+      daemon: isDaemonChild,
+      logFile: logFile,
     });
 
     // Handle graceful shutdown
     const shutdown = () => {
-      console.log(chalk.yellow('\n\nReceived shutdown signal...'));
+      if (!isDaemonChild) {
+        console.log(chalk.yellow('\n\nReceived shutdown signal...'));
+      }
       session.close();
       process.exit(0);
     };
@@ -44,13 +86,17 @@ program
     });
 
     session.on('error', (error: Error) => {
-      console.error(chalk.red('Session error:'), error.message);
+      if (!isDaemonChild) {
+        console.error(chalk.red('Session error:'), error.message);
+      }
     });
 
     try {
       await session.start();
     } catch (error) {
-      console.error(chalk.red('Failed to start session:'), error);
+      if (!isDaemonChild) {
+        console.error(chalk.red('Failed to start session:'), error);
+      }
       process.exit(1);
     }
   });
@@ -117,19 +163,80 @@ program
     console.log(chalk.green('✓ Logged out'));
   });
 
-// Sessions command (placeholder for listing history)
+// Sessions command - list active daemon sessions
 program
   .command('sessions')
-  .description('List your session history')
+  .description('List active daemon sessions')
   .action(async () => {
-    const config = loadConfig();
-    if (!config.authToken) {
-      console.log(chalk.yellow('You are not logged in.'));
-      console.log('Login with "always login" to access session history.');
+    // Clean up stale sessions first
+    cleanupStaleSessions();
+
+    const sessions = listDaemonSessions();
+
+    if (sessions.length === 0) {
+      console.log(chalk.yellow('No active sessions.'));
+      console.log(chalk.gray('Start a daemon session with: always claude --daemon'));
       return;
     }
-    console.log(chalk.yellow('Session history is not yet implemented.'));
-    // TODO: Implement session history retrieval
+
+    console.log(chalk.cyan('Active Sessions:'));
+    console.log('');
+
+    for (const session of sessions) {
+      const running = isProcessRunning(session.pid);
+      const status = running ? chalk.green('● running') : chalk.red('● stopped');
+      const startedAt = new Date(session.startedAt).toLocaleString();
+
+      console.log(`${status}  ${chalk.bold(session.sessionId)}`);
+      console.log(chalk.gray(`    Command: ${session.command} ${session.args.join(' ')}`));
+      console.log(chalk.gray(`    PID: ${session.pid}`));
+      console.log(chalk.gray(`    Started: ${startedAt}`));
+      console.log(chalk.blue(`    Web URL: ${session.webUrl}`));
+      console.log(chalk.gray(`    Log: ${session.logFile}`));
+      console.log('');
+    }
+
+    console.log(chalk.gray('To stop a session: always stop <session-id>'));
+  });
+
+// Stop command - stop a daemon session
+program
+  .command('stop <sessionId>')
+  .description('Stop a daemon session')
+  .action(async (sessionId: string) => {
+    const stopped = stopDaemonSession(sessionId);
+
+    if (stopped) {
+      console.log(chalk.green(`✓ Session ${sessionId} stopped`));
+    } else {
+      console.log(chalk.yellow(`Session ${sessionId} not found or already stopped`));
+    }
+  });
+
+// Logs command - tail daemon session logs
+program
+  .command('logs <sessionId>')
+  .description('View daemon session logs')
+  .option('-f, --follow', 'Follow log output')
+  .option('-n, --lines <number>', 'Number of lines to show', '50')
+  .action(async (sessionId: string, options: { follow?: boolean; lines?: string }) => {
+    // Clean up stale sessions first
+    cleanupStaleSessions();
+
+    const sessions = listDaemonSessions();
+    const session = sessions.find(s => s.sessionId === sessionId || s.sessionId.startsWith(sessionId));
+
+    if (!session) {
+      console.log(chalk.red(`Session ${sessionId} not found`));
+      console.log(chalk.gray('Run "always sessions" to see active sessions'));
+      process.exit(1);
+    }
+
+    const { spawn } = await import('child_process');
+    const tailArgs = options.follow ? ['-f', '-n', options.lines || '50', session.logFile] : ['-n', options.lines || '50', session.logFile];
+
+    const tail = spawn('tail', tailArgs, { stdio: 'inherit' });
+    tail.on('exit', (code) => process.exit(code || 0));
   });
 
 // Parse and run

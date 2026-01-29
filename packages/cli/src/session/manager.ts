@@ -1,10 +1,12 @@
 import { EventEmitter } from 'events';
+import { createWriteStream, type WriteStream } from 'fs';
 import { MessageType, type EncryptedEnvelope } from '@always-coder/shared';
 import { WebSocketClient } from '../websocket/client.js';
 import { EncryptionManager } from '../crypto/encryption.js';
 import { Terminal, type TerminalOptions } from '../pty/terminal.js';
 import { displayQRCode } from '../qrcode/generator.js';
-import { getWSEndpoint, loadConfig } from '../config/index.js';
+import { getWSEndpoint, getWebUrl, loadConfig } from '../config/index.js';
+import { saveDaemonSession, deleteDaemonSession, type DaemonSession } from '../daemon/index.js';
 import chalk from 'chalk';
 
 /**
@@ -26,6 +28,8 @@ export interface SessionManagerOptions {
   command: string;
   args?: string[];
   serverUrl?: string;
+  daemon?: boolean;
+  logFile?: string;
 }
 
 /**
@@ -40,11 +44,48 @@ export class SessionManager extends EventEmitter {
   private isReady: boolean = false;
   private terminalBuffer: string = '';
   private maxBufferSize: number = 100 * 1024; // 100KB buffer for late joiners
+  private isDaemon: boolean = false;
+  private logStream: WriteStream | null = null;
 
   constructor(options: SessionManagerOptions) {
     super();
     this.options = options;
     this.encryption = new EncryptionManager();
+    this.isDaemon = options.daemon || false;
+
+    // Set up logging for daemon mode
+    if (this.isDaemon && options.logFile) {
+      this.logStream = createWriteStream(options.logFile, { flags: 'a' });
+    }
+  }
+
+  /**
+   * Log message (to console or file in daemon mode)
+   */
+  private log(message: string): void {
+    const timestamp = new Date().toISOString();
+    const logLine = `[${timestamp}] ${message}\n`;
+
+    if (this.isDaemon && this.logStream) {
+      this.logStream.write(logLine);
+    } else {
+      console.log(message);
+    }
+  }
+
+  /**
+   * Log error message
+   */
+  private logError(message: string, error?: unknown): void {
+    const timestamp = new Date().toISOString();
+    const errorStr = error instanceof Error ? error.message : String(error);
+    const logLine = `[${timestamp}] ERROR: ${message}${error ? ` - ${errorStr}` : ''}\n`;
+
+    if (this.isDaemon && this.logStream) {
+      this.logStream.write(logLine);
+    } else {
+      console.error(chalk.red(message), error || '');
+    }
   }
 
   /**
@@ -55,10 +96,10 @@ export class SessionManager extends EventEmitter {
     const config = loadConfig();
     const authToken = config.authToken;
 
-    console.log(chalk.blue('🚀 Starting Always Coder session...'));
-    console.log(chalk.gray(`   Server: ${wsEndpoint}`));
+    this.log(chalk.blue('🚀 Starting Always Coder session...'));
+    this.log(chalk.gray(`   Server: ${wsEndpoint}`));
     if (authToken) {
-      console.log(chalk.gray('   Auth: Using configured token'));
+      this.log(chalk.gray('   Auth: Using configured token'));
     }
 
     // Connect to WebSocket server with optional auth token
@@ -77,16 +118,33 @@ export class SessionManager extends EventEmitter {
         this.encryption.getPublicKey()
       );
 
-      // Display QR code for web connection
-      displayQRCode({
-        sessionId: this.encryption.getSessionId(),
-        publicKey: this.encryption.getPublicKey(),
-        wsEndpoint,
-      });
+      // Save daemon session info
+      if (this.isDaemon) {
+        const webUrl = getWebUrl();
+        const daemonSession: DaemonSession = {
+          sessionId: this.encryption.getSessionId(),
+          pid: process.pid,
+          command: this.options.command,
+          args: this.options.args || [],
+          startedAt: Date.now(),
+          webUrl: `${webUrl}/join?session=${this.encryption.getSessionId()}&key=${encodeURIComponent(this.encryption.getPublicKey())}`,
+          logFile: this.options.logFile || '',
+        };
+        saveDaemonSession(daemonSession);
+        this.log(`Session saved: ${daemonSession.sessionId}`);
+        this.log(`Web URL: ${daemonSession.webUrl}`);
+      } else {
+        // Display QR code for web connection (only in interactive mode)
+        displayQRCode({
+          sessionId: this.encryption.getSessionId(),
+          publicKey: this.encryption.getPublicKey(),
+          wsEndpoint,
+        });
+      }
 
-      console.log(chalk.yellow('⏳ Waiting for web client to connect...'));
+      this.log(chalk.yellow('⏳ Waiting for web client to connect...'));
     } catch (error) {
-      console.error(chalk.red('Failed to connect to server:'), error);
+      this.logError('Failed to connect to server:', error);
       throw error;
     }
   }
@@ -98,19 +156,19 @@ export class SessionManager extends EventEmitter {
     if (!this.wsClient) return;
 
     this.wsClient.on('session:created', () => {
-      console.log(chalk.green('✓ Session created on server'));
+      this.log(chalk.green('✓ Session created on server'));
     });
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {
       try {
-        console.log(chalk.green(`✓ Web client connected: ${data.connectionId}`));
-        console.log(chalk.gray(`   Public key: ${data.publicKey.substring(0, 20)}...`));
+        this.log(chalk.green(`✓ Web client connected: ${data.connectionId}`));
+        this.log(chalk.gray(`   Public key: ${data.publicKey.substring(0, 20)}...`));
         this.connectedWebClients.add(data.connectionId);
 
         // Establish shared encryption key
         if (!this.encryption.isReady()) {
           this.encryption.establishSharedKey(data.publicKey);
-          console.log(chalk.green('✓ Encryption established'));
+          this.log(chalk.green('✓ Encryption established'));
 
           // Start the terminal now that we have a client
           this.startTerminal();
@@ -121,18 +179,18 @@ export class SessionManager extends EventEmitter {
 
         this.emit('web:connected', data.connectionId);
       } catch (error) {
-        console.error(chalk.red('Error handling web connection:'), error);
+        this.logError('Error handling web connection:', error);
         // Don't crash - just log the error
       }
     });
 
     this.wsClient.on('web:disconnected', (data: { connectionId: string }) => {
-      console.log(chalk.yellow(`⚠ Web client disconnected: ${data.connectionId}`));
+      this.log(chalk.yellow(`⚠ Web client disconnected: ${data.connectionId}`));
       this.connectedWebClients.delete(data.connectionId);
       this.emit('web:disconnected', data.connectionId);
 
       if (this.connectedWebClients.size === 0) {
-        console.log(chalk.yellow('⏳ No web clients connected. Waiting for reconnection...'));
+        this.log(chalk.yellow('⏳ No web clients connected. Waiting for reconnection...'));
       }
     });
 
@@ -141,12 +199,12 @@ export class SessionManager extends EventEmitter {
     });
 
     this.wsClient.on('error', (error: Error) => {
-      console.error(chalk.red('WebSocket error:'), error.message);
+      this.logError('WebSocket error:', error.message);
       this.emit('error', error);
     });
 
     this.wsClient.on('close', () => {
-      console.log(chalk.yellow('WebSocket connection closed'));
+      this.log(chalk.yellow('WebSocket connection closed'));
     });
   }
 
@@ -221,15 +279,17 @@ export class SessionManager extends EventEmitter {
       command: this.options.command,
       args,
       cwd: process.cwd(),
-      cols: process.stdout.columns || 80,
-      rows: process.stdout.rows || 24,
+      cols: this.isDaemon ? 120 : (process.stdout.columns || 80),
+      rows: this.isDaemon ? 40 : (process.stdout.rows || 24),
     };
 
     this.terminal = new Terminal(terminalOptions);
 
     this.terminal.on('data', (data: string) => {
-      // Write to local stdout
-      process.stdout.write(data);
+      // Write to local stdout (only in interactive mode)
+      if (!this.isDaemon) {
+        process.stdout.write(data);
+      }
 
       // Buffer for late joiners
       this.terminalBuffer += data;
@@ -242,40 +302,42 @@ export class SessionManager extends EventEmitter {
     });
 
     this.terminal.on('exit', (exitCode: number) => {
-      console.log(chalk.blue(`\n✓ Process exited with code ${exitCode}`));
+      this.log(chalk.blue(`\n✓ Process exited with code ${exitCode}`));
       this.emit('terminal:exit', exitCode);
       this.close();
     });
 
     this.terminal.on('error', (error: Error) => {
-      console.error(chalk.red('Terminal error:'), error);
+      this.logError('Terminal error:', error);
       this.emit('error', error);
     });
 
-    // Handle local stdin
-    this.setupLocalInput();
+    // Handle local stdin (only in interactive mode)
+    if (!this.isDaemon) {
+      this.setupLocalInput();
 
-    // Handle terminal resize
-    process.stdout.on('resize', () => {
-      const { columns, rows } = process.stdout;
-      if (this.terminal && columns && rows) {
-        this.terminal.resize(columns, rows);
-      }
-    });
+      // Handle terminal resize
+      process.stdout.on('resize', () => {
+        const { columns, rows } = process.stdout;
+        if (this.terminal && columns && rows) {
+          this.terminal.resize(columns, rows);
+        }
+      });
+    }
 
     // Start the terminal
     this.terminal.start();
     this.isReady = true;
     this.emit('ready');
 
-    console.log(chalk.green('\n✓ Terminal started. You can now use it locally and remotely.\n'));
+    this.log(chalk.green('\n✓ Terminal started. You can now use it locally and remotely.\n'));
 
     // Auto-accept trust dialog for claude/codex by sending Enter after a delay
     // This accepts the default "Yes, I trust this folder" option
     if (this.options.command === 'claude' || this.options.command === 'codex') {
       setTimeout(() => {
         if (this.terminal?.isRunning()) {
-          console.log(chalk.gray('   Auto-accepting trust dialog...'));
+          this.log(chalk.gray('   Auto-accepting trust dialog...'));
           this.terminal.write('\r');  // Carriage return for Enter
         }
       }, 2000);  // Wait for dialog to appear
@@ -361,13 +423,20 @@ export class SessionManager extends EventEmitter {
    * Close the session
    */
   close(): void {
-    console.log(chalk.blue('\n🔌 Closing session...'));
+    this.log(chalk.blue('\n🔌 Closing session...'));
 
-    // Restore stdin
-    if (process.stdin.isTTY) {
+    // Delete daemon session info
+    if (this.isDaemon) {
+      deleteDaemonSession(this.encryption.getSessionId());
+    }
+
+    // Restore stdin (only in interactive mode)
+    if (!this.isDaemon && process.stdin.isTTY) {
       process.stdin.setRawMode(false);
     }
-    process.stdin.pause();
+    if (!this.isDaemon) {
+      process.stdin.pause();
+    }
 
     // Kill terminal
     if (this.terminal) {
@@ -379,6 +448,12 @@ export class SessionManager extends EventEmitter {
     if (this.wsClient) {
       this.wsClient.close();
       this.wsClient = null;
+    }
+
+    // Close log stream
+    if (this.logStream) {
+      this.logStream.end();
+      this.logStream = null;
     }
 
     this.emit('closed');
