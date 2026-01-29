@@ -52,6 +52,8 @@ export class Terminal extends EventEmitter {
     } as Record<string, string>;
 
     console.log(`Starting PTY: ${shell} ${args.join(' ')}`);
+    console.log(`  CWD: ${cwd}`);
+    console.log(`  Size: ${this.cols}x${this.rows}`);
 
     try {
       this.ptyProcess = pty.spawn(shell, args, {
@@ -60,6 +62,7 @@ export class Terminal extends EventEmitter {
         rows: this.rows,
         cwd,
         env,
+        handleFlowControl: true,
       });
 
       this.ptyProcess.onData((data) => {

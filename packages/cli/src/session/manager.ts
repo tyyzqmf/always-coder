@@ -253,6 +253,17 @@ export class SessionManager extends EventEmitter {
     this.emit('ready');
 
     console.log(chalk.green('\n✓ Terminal started. You can now use it locally and remotely.\n'));
+
+    // Auto-accept trust dialog for claude/codex by sending Enter after a short delay
+    // This accepts the default "Yes, I trust this folder" option
+    if (this.options.command === 'claude' || this.options.command === 'codex') {
+      setTimeout(() => {
+        if (this.terminal?.isRunning()) {
+          console.log(chalk.gray('   Auto-accepting trust dialog...'));
+          this.terminal.write('\r');
+        }
+      }, 500);
+    }
   }
 
   /**
