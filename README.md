@@ -1,93 +1,161 @@
-# always coder
+# Always Coder
 
+Remote AI coding agent control system built on AWS. Control your AI coding assistants (Claude, Codex, etc.) from anywhere via a secure web interface.
 
+## Features
 
-## Getting started
+- 🔐 **End-to-End Encryption**: All terminal data is encrypted using X25519 + XSalsa20-Poly1305
+- 📱 **Mobile-First Web UI**: Access your terminal from any device
+- 🔗 **QR Code Pairing**: Quick and secure session establishment
+- ☁️ **Serverless Architecture**: Built on AWS Lambda, API Gateway, and DynamoDB
+- 🚀 **Real-time Communication**: WebSocket-based bidirectional streaming
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.aws.dev/mingfeiq/always-coder.git
-git branch -M main
-git push -uf origin main
+┌─────────────┐    WebSocket (E2EE)    ┌─────────────────┐    WebSocket (E2EE)    ┌─────────────┐
+│  CLI Client │◄─────────────────────►│   AWS Backend   │◄─────────────────────►│  Web Client │
+│  (Bun/PTY)  │                        │ (Lambda/APIGW)  │                        │  (Next.js)  │
+└─────────────┘                        └─────────────────┘                        └─────────────┘
 ```
 
-## Integrate with your tools
+## Quick Start
 
-- [ ] [Set up project integrations](https://gitlab.aws.dev/mingfeiq/always-coder/-/settings/integrations)
+### Prerequisites
 
-## Collaborate with your team
+- Node.js 20+
+- Bun 1.0+
+- pnpm 8+
+- AWS CLI configured
+- AWS CDK CLI (`npm install -g aws-cdk`)
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Installation
 
-## Test and Deploy
+```bash
+# Clone the repository
+git clone https://github.com/your-org/always-coder.git
+cd always-coder
 
-Use the built-in continuous integration in GitLab.
+# Install dependencies
+pnpm install
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+# Build shared package
+pnpm --filter @always-coder/shared build
+```
 
-***
+### Deploy AWS Infrastructure
 
-# Editing this README
+```bash
+# Bootstrap CDK (first time only)
+cd infra
+pnpm cdk bootstrap
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+# Deploy all stacks
+pnpm cdk deploy --all
 
-## Suggestions for a good README
+# Note the outputs:
+# - WebSocketUrl: wss://xxx.execute-api.region.amazonaws.com/prod
+# - UserPoolId: us-east-1_xxx
+# - UserPoolClientId: xxx
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### Configure Web Client
 
-## Name
-Choose a self-explaining name for your project.
+```bash
+cd packages/web
+cp .env.example .env.local
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+# Edit .env.local with the values from CDK deploy output
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### Run Locally
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+# Terminal 1: Start web dev server
+cd packages/web
+pnpm dev
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# Terminal 2: Run CLI
+cd packages/cli
+bun run src/index.ts claude
+```
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Start a Remote Session
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```bash
+# Wrap any command
+always claude              # Control Claude Code
+always codex               # Control Codex
+always -- npm run dev      # Wrap any command
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+# With custom server
+always claude --server wss://your-api.execute-api.region.amazonaws.com/prod
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### Connect from Web
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+1. Open the web app on your phone/browser
+2. Scan the QR code displayed in your terminal
+3. Start interacting with your AI assistant remotely!
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Project Structure
+
+```
+always-coder/
+├── packages/
+│   ├── cli/          # Bun CLI client
+│   ├── server/       # AWS Lambda handlers
+│   ├── web/          # Next.js web frontend
+│   └── shared/       # Shared types and crypto
+├── infra/            # AWS CDK infrastructure
+└── docs/             # Documentation
+```
+
+## Security
+
+- **Zero-Knowledge Server**: The server never sees decrypted data
+- **X25519 Key Exchange**: Secure key establishment via QR code
+- **XSalsa20-Poly1305**: Authenticated encryption for all messages
+- **Session TTL**: Automatic cleanup after 24 hours
+- **No Persistence**: Terminal content is not stored on the server
+
+## Configuration
+
+### CLI Configuration
+
+```bash
+# Set server URL
+always config set server wss://your-api.execute-api.region.amazonaws.com/prod
+
+# View configuration
+always config list
+```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ALWAYS_CODER_SERVER` | WebSocket server URL |
+| `ALWAYS_CODER_WEB_URL` | Web app URL (for QR code) |
+
+## Development
+
+```bash
+# Run all packages in dev mode
+pnpm dev
+
+# Run tests
+pnpm test
+
+# Type check
+pnpm typecheck
+
+# Lint
+pnpm lint
+```
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT

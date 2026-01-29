@@ -1,0 +1,7 @@
+[install]
+# Prefer offline packages when available
+prefer-offline = true
+
+[run]
+# Show bun's debugger on uncaught exceptions
+# bun = true

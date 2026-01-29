@@ -1,0 +1,28 @@
+{
+  "name": "@always-coder/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "always": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun",
+    "build:binary": "bun build ./src/index.ts --compile --outfile ./dist/always",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@always-coder/shared": "workspace:*",
+    "commander": "^12.0.0",
+    "node-pty": "^1.0.0",
+    "qrcode-terminal": "^0.12.0",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "bun-types": "^1.0.25"
+  }
+}
