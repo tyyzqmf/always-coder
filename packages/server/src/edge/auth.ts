@@ -272,9 +272,11 @@ function generateLogoutResponse(request: CloudFrontRequest): CloudFrontRequestRe
 
   // Build Cognito logout URL - this will invalidate the Cognito session
   // and redirect back to our app (which will then redirect to login)
+  // Note: Cognito hosted UI requires client_id, logout_uri AND redirect_uri
   const logoutUrl = new URL(`https://${CONFIG.COGNITO_DOMAIN}/logout`);
   logoutUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
-  logoutUrl.searchParams.set('logout_uri', `https://${host}/`);
+  logoutUrl.searchParams.set('logout_uri', `https://${host}`);
+  logoutUrl.searchParams.set('redirect_uri', `https://${host}`);
 
   return {
     status: '302',
