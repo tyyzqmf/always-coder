@@ -5,18 +5,32 @@ Remote AI coding agent control - access Claude, Codex and other AI assistants fr
 ## Quick Start
 
 ```bash
-# Install
-pnpm install && pnpm build
+# Clone and build
+git clone https://github.com/tyyzqmf/always-coder.git
+cd always-coder
+pnpm install && pnpm build:cli
 
-# Run CLI
+# Configure server
+node packages/cli/dist/index.js config set server wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod
+
+# Run
+node packages/cli/dist/index.js claude
+```
+
+**One-liner:**
+```bash
+git clone https://github.com/tyyzqmf/always-coder.git && cd always-coder && pnpm install && pnpm build:cli && node packages/cli/dist/index.js config set server wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod && node packages/cli/dist/index.js claude
+```
+
+## CLI Commands
+
+```bash
 always claude                    # Interactive mode
 always claude --daemon           # Background mode
-
-# Commands
 always sessions                  # List active sessions
 always stop <id>                 # Stop a session
 always clean                     # Stop all sessions
-always config set server <url>  # Set server URL
+always config set server <url>   # Set server URL
 ```
 
 ## Development
