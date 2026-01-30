@@ -8,6 +8,7 @@ export type WebSocketEventHandler = {
   onEncrypted?: (envelope: EncryptedEnvelope) => void;
   onCliDisconnected?: () => void;
   onPong?: () => void;
+  onServerError?: (code: string, message: string) => void;
 };
 
 export class WebSocketManager {
@@ -68,6 +69,9 @@ export class WebSocketManager {
 
       if (message.type === MessageType.SESSION_JOINED) {
         this.handlers.onSessionJoined?.(message);
+      } else if (message.type === MessageType.ERROR) {
+        console.error('Server error:', message.code, message.message);
+        this.handlers.onServerError?.(message.code, message.message);
       } else if (message.type === 'cli:disconnected') {
         this.handlers.onCliDisconnected?.();
       } else if (message.type === MessageType.PONG) {

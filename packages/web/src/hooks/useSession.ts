@@ -6,6 +6,9 @@ import { useSessionStore } from '@/stores/session';
 import { useCrypto } from './useCrypto';
 import { useWebSocket } from './useWebSocket';
 
+// Maximum consecutive decryption failures before alerting user
+const MAX_DECRYPTION_FAILURES = 3;
+
 interface UseSessionOptions {
   onTerminalOutput?: (data: string) => void;
   onStateSync?: (state: { cols: number; rows: number }) => void;
@@ -20,16 +23,33 @@ export function useSession(options: UseSessionOptions = {}) {
     setConnectionStatus,
     setEncryptionReady,
     setError,
+    reset,
   } = useSessionStore();
 
-  const { getPublicKey, establishSharedKey, isReady, encrypt, decrypt } = useCrypto();
+  const {
+    getPublicKey,
+    establishSharedKey,
+    reestablishSharedKey,
+    isCliKeyChanged,
+    isReady,
+    encrypt,
+    decrypt,
+    clearCrypto,
+  } = useCrypto();
+
   const seqRef = useRef(0);
+  const decryptionFailuresRef = useRef(0);
 
   const handleEncrypted = useCallback((envelope: EncryptedEnvelope) => {
-    if (!isReady()) return;
+    if (!isReady()) {
+      console.warn('Received encrypted message before encryption is ready');
+      return;
+    }
 
     try {
       const message = decrypt(envelope);
+      // Reset failure counter on successful decryption
+      decryptionFailuresRef.current = 0;
 
       switch (message.type) {
         case MessageType.TERMINAL_OUTPUT:
@@ -44,17 +64,51 @@ export function useSession(options: UseSessionOptions = {}) {
           console.log('Unknown message type:', message.type);
       }
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      decryptionFailuresRef.current++;
+      console.error('Failed to decrypt message:', error, {
+        consecutiveFailures: decryptionFailuresRef.current,
+        maxFailures: MAX_DECRYPTION_FAILURES,
+      });
+
+      // Alert user after multiple consecutive failures - could indicate key mismatch or attack
+      if (decryptionFailuresRef.current >= MAX_DECRYPTION_FAILURES) {
+        setError(
+          'Failed to decrypt multiple messages. The encryption keys may be out of sync. ' +
+          'Please refresh the page or scan the QR code again.'
+        );
+        // Clear crypto state to force re-establishment on next connection
+        clearCrypto();
+      }
     }
-  }, [isReady, decrypt, options]);
+  }, [isReady, decrypt, options, setError, clearCrypto]);
 
   const handleSessionJoined = useCallback((data: { sessionId: string; cliPublicKey: string }) => {
     console.log('Session joined:', data.sessionId);
     setCliPublicKey(data.cliPublicKey);
-    establishSharedKey(data.cliPublicKey);
+
+    // Check if CLI's public key changed (CLI was restarted)
+    if (isCliKeyChanged(data.cliPublicKey)) {
+      console.log('CLI public key changed, re-establishing shared key');
+      reestablishSharedKey(data.cliPublicKey);
+    } else if (!isReady()) {
+      // First time establishing shared key
+      establishSharedKey(data.cliPublicKey);
+    }
+    // If isReady() and key hasn't changed, we're reconnecting with stored shared key
+
+    // Reset decryption failure counter on successful connection
+    decryptionFailuresRef.current = 0;
     setEncryptionReady(true);
     setConnectionStatus('connected');
-  }, [setCliPublicKey, establishSharedKey, setEncryptionReady, setConnectionStatus]);
+  }, [
+    setCliPublicKey,
+    isCliKeyChanged,
+    reestablishSharedKey,
+    establishSharedKey,
+    setEncryptionReady,
+    setConnectionStatus,
+    isReady,
+  ]);
 
   const handleCliDisconnected = useCallback(() => {
     setError('CLI disconnected');
@@ -68,25 +122,54 @@ export function useSession(options: UseSessionOptions = {}) {
     }
   }, [setConnectionStatus]);
 
+  const handleServerError = useCallback((code: string, message: string) => {
+    console.error('Server error:', code, message);
+
+    // If session not found, clear stored state so user can start fresh
+    if (code === 'SESSION_NOT_FOUND') {
+      clearCrypto();
+      reset();
+      setError('Session not found or expired. Please scan the QR code again.');
+    } else if (code === 'CONNECTION_FAILED') {
+      setError('CLI is not connected. Please ensure the CLI is running.');
+    } else {
+      setError(message || 'An error occurred');
+    }
+  }, [clearCrypto, reset, setError]);
+
   const { connect, disconnect, joinSession, sendEncrypted } = useWebSocket({
     onSessionJoined: handleSessionJoined,
     onEncrypted: handleEncrypted,
     onCliDisconnected: handleCliDisconnected,
     onStatusChange: handleStatusChange,
+    onServerError: handleServerError,
   });
 
-  const connectToSession = useCallback(async (targetSessionId: string) => {
+  const connectToSession = useCallback(async (targetSessionId: string, isReconnect = false) => {
     setSessionId(targetSessionId);
     setConnectionStatus('connecting');
 
     try {
       await connect();
+
+      // Check if we have stored encryption state (page refresh scenario)
+      // Note: The shared key may have been restored from sessionStorage.
+      // The actual validation of CLI's key happens in handleSessionJoined.
+      if (isReconnect && isReady()) {
+        console.log('Reconnecting with stored encryption state');
+        setEncryptionReady(true);
+      }
+
+      // Always send SESSION_JOIN to server - it will handle both new connections
+      // and reconnections (after page refresh). Note: We always send a fresh public key
+      // since we regenerate our keypair on each page load for security.
       joinSession(targetSessionId, getPublicKey());
     } catch (error) {
       console.error('Failed to connect:', error);
       setError('Failed to connect to server');
+      setConnectionStatus('error');
     }
-  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError]);
+  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError, isReady, setEncryptionReady]);
 
   const sendInput = useCallback((data: string) => {
     if (!isReady() || !sessionId) return;
@@ -114,10 +197,16 @@ export function useSession(options: UseSessionOptions = {}) {
     sendEncrypted(envelope);
   }, [isReady, sessionId, encrypt, sendEncrypted]);
 
-  const disconnectSession = useCallback(() => {
+  const disconnectSession = useCallback((clearState = false) => {
     disconnect();
     setConnectionStatus('disconnected');
-  }, [disconnect, setConnectionStatus]);
+
+    // Optionally clear all stored state (e.g., when user explicitly disconnects)
+    if (clearState) {
+      clearCrypto();
+      reset();
+    }
+  }, [disconnect, setConnectionStatus, clearCrypto, reset]);
 
   return {
     sessionId,

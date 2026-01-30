@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
+import { execFileSync } from 'child_process';
 import { SessionManager } from './session/manager.js';
 import { loadConfig, saveConfig, getConfigValue, setConfigValue } from './config/index.js';
 import {
@@ -19,6 +20,23 @@ if (process.env.ALWAYS_CODER_DAEMON === 'true') {
   process.on('SIGHUP', () => {
     // Ignore SIGHUP in daemon mode
   });
+}
+
+// Check if a command exists in PATH
+// SECURITY: Uses execFileSync with array args to prevent command injection
+function commandExists(cmd: string): boolean {
+  // Validate input - only allow safe characters in command names
+  if (!/^[a-zA-Z0-9_\-./]+$/.test(cmd)) {
+    return false;
+  }
+
+  try {
+    // Use execFileSync which doesn't spawn a shell, preventing injection
+    execFileSync('which', [cmd], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const program = new Command();
@@ -40,6 +58,15 @@ program
     // Handle command that contains spaces (e.g., "sleep 300")
     let cmd = command || 'claude';
     let cmdArgs = args;
+
+    // Check if command exists (skip check for daemon child processes)
+    const isDaemonChildEarly = options.daemonChild || process.env.ALWAYS_CODER_DAEMON === 'true';
+    if (!isDaemonChildEarly && cmd !== 'claude' && !commandExists(cmd.split(/\s+/)[0])) {
+      console.error(chalk.red(`Error: Command '${cmd}' not found`));
+      console.log('');
+      program.help();
+      return;
+    }
     if (cmd.includes(' ')) {
       const parts = cmd.split(/\s+/);
       cmd = parts[0];

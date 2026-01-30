@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -27,20 +28,34 @@ const initialState = {
   isEncryptionReady: false,
 };
 
-export const useSessionStore = create<SessionState>((set) => ({
-  ...initialState,
+export const useSessionStore = create<SessionState>()(
+  persist(
+    (set) => ({
+      ...initialState,
 
-  setSessionId: (sessionId) => set({ sessionId }),
+      setSessionId: (sessionId) => set({ sessionId }),
 
-  setCliPublicKey: (cliPublicKey) => set({ cliPublicKey }),
+      setCliPublicKey: (cliPublicKey) => set({ cliPublicKey }),
 
-  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+      setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
 
-  setError: (errorMessage) => set({ errorMessage, connectionStatus: 'error' }),
+      setError: (errorMessage) => set({ errorMessage, connectionStatus: 'error' }),
 
-  clearError: () => set({ errorMessage: null }),
+      clearError: () => set({ errorMessage: null }),
 
-  setEncryptionReady: (isEncryptionReady) => set({ isEncryptionReady }),
+      setEncryptionReady: (isEncryptionReady) => set({ isEncryptionReady }),
 
-  reset: () => set(initialState),
-}));
+      reset: () => set(initialState),
+    }),
+    {
+      name: 'always-coder:session',
+      storage: createJSONStorage(() => sessionStorage),
+      // Only persist session-related data, not transient connection status
+      partialize: (state) => ({
+        sessionId: state.sessionId,
+        cliPublicKey: state.cliPublicKey,
+        isEncryptionReady: state.isEncryptionReady,
+      }),
+    }
+  )
+);

@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
+    "build:cli": "pnpm --filter @always-coder/shared build && pnpm --filter @always-coder/cli build",
     "test": "pnpm -r test",
     "test:integration": "pnpm -r test:integration",
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean && rm -rf node_modules",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm lint && pnpm build:cli",
+    "always": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

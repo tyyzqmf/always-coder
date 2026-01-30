@@ -7,10 +7,11 @@ import type { EncryptedEnvelope, Message } from '@always-coder/shared';
 export function useCrypto() {
   const cryptoRef = useRef<WebCrypto | null>(null);
 
-  // Initialize crypto lazily
+  // Initialize crypto lazily, restoring shared key from sessionStorage if available.
+  // Note: Private key is NEVER stored - only the derived shared key is persisted.
   const getCrypto = useCallback(() => {
     if (!cryptoRef.current) {
-      cryptoRef.current = new WebCrypto();
+      cryptoRef.current = new WebCrypto(true);
     }
     return cryptoRef.current;
   }, []);
@@ -23,9 +24,25 @@ export function useCrypto() {
     getCrypto().establishSharedKey(cliPublicKey);
   }, [getCrypto]);
 
+  // Force re-establishment of shared key (e.g., when CLI restarted with new keys)
+  const reestablishSharedKey = useCallback((cliPublicKey: string) => {
+    getCrypto().reestablishSharedKey(cliPublicKey);
+  }, [getCrypto]);
+
+  // Check if CLI's public key changed since we stored the shared key
+  const isCliKeyChanged = useCallback((cliPublicKey: string) => {
+    return getCrypto().isCliKeyChanged(cliPublicKey);
+  }, [getCrypto]);
+
+  // Get the stored CLI public key for comparison
+  const getStoredCliPublicKey = useCallback(() => {
+    return getCrypto().getStoredCliPublicKey();
+  }, [getCrypto]);
+
+  // Check if crypto is ready (has shared key from either restoration or establishment)
   const isReady = useCallback(() => {
-    return cryptoRef.current?.hasSharedKey() ?? false;
-  }, []);
+    return getCrypto().hasSharedKey();
+  }, [getCrypto]);
 
   const encrypt = useCallback(<T>(message: Message<T>, sessionId: string): EncryptedEnvelope => {
     return getCrypto().encrypt(message, sessionId);
@@ -35,11 +52,21 @@ export function useCrypto() {
     return getCrypto().decrypt(envelope);
   }, [getCrypto]);
 
+  // Clear all stored crypto state (used when disconnecting)
+  const clearCrypto = useCallback(() => {
+    WebCrypto.clearStorage();
+    cryptoRef.current = null;
+  }, []);
+
   return {
     getPublicKey,
     establishSharedKey,
+    reestablishSharedKey,
+    isCliKeyChanged,
+    getStoredCliPublicKey,
     isReady,
     encrypt,
     decrypt,
+    clearCrypto,
   };
 }
