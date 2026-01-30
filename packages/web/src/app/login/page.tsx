@@ -7,7 +7,6 @@ import {
   CognitoUser,
   AuthenticationDetails,
   CognitoUserSession,
-  CognitoUserAttribute,
 } from 'amazon-cognito-identity-js';
 
 // Cognito configuration - injected at build time
@@ -24,7 +23,7 @@ function LoginContent() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'signup' | 'newPasswordRequired' | 'forgotPassword' | 'confirmReset'>('login');
+  const [mode, setMode] = useState<'login' | 'newPasswordRequired' | 'forgotPassword' | 'confirmReset'>('login');
   const [verificationCode, setVerificationCode] = useState('');
   const [cognitoUser, setCognitoUser] = useState<CognitoUser | null>(null);
   const [userAttributes, setUserAttributes] = useState<Record<string, string>>({});
@@ -155,60 +154,6 @@ function LoginContent() {
     });
   }, [newPassword, confirmPassword, cognitoUser, userAttributes, email, setSessionCookies, getReturnUrl]);
 
-  const handleSignup = useCallback(async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setIsLoading(true);
-
-    const trimmedEmail = email.trim().toLowerCase();
-
-    if (!trimmedEmail || !password) {
-      setError('Email and password are required');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      setIsLoading(false);
-      return;
-    }
-
-    const emailAttribute = new CognitoUserAttribute({
-      Name: 'email',
-      Value: trimmedEmail,
-    });
-
-    userPool.signUp(
-      trimmedEmail,
-      password,
-      [emailAttribute],
-      [],
-      (err, result) => {
-        setIsLoading(false);
-        if (err) {
-          if (err.message.includes('password')) {
-            setError('Password must contain uppercase, lowercase, and numbers');
-          } else {
-            setError(err.message || 'Signup failed');
-          }
-          return;
-        }
-        setMessage('Account created! Please check your email to verify your account, then log in.');
-        setMode('login');
-        setPassword('');
-        setConfirmPassword('');
-      }
-    );
-  }, [email, password, confirmPassword, userPool]);
-
   const handleForgotPassword = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -299,7 +244,6 @@ function LoginContent() {
           </h1>
           <p className="text-terminal-fg/60">
             {mode === 'login' && 'Sign in to continue'}
-            {mode === 'signup' && 'Create your account'}
             {mode === 'newPasswordRequired' && 'Set your new password'}
             {mode === 'forgotPassword' && 'Reset your password'}
             {mode === 'confirmReset' && 'Enter verification code'}
@@ -369,7 +313,7 @@ function LoginContent() {
               )}
             </button>
 
-            <div className="flex items-center justify-between text-sm">
+            <div className="text-center text-sm">
               <button
                 type="button"
                 onClick={() => {
@@ -380,104 +324,6 @@ function LoginContent() {
                 className="text-terminal-fg/60 hover:text-terminal-blue transition-colors"
               >
                 Forgot password?
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setError(null);
-                  setMessage(null);
-                  setPassword('');
-                }}
-                className="text-terminal-blue hover:text-terminal-blue/80 transition-colors"
-              >
-                Create account
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Signup form */}
-        {mode === 'signup' && (
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div>
-              <label htmlFor="signup-email" className="block text-sm text-terminal-fg/80 mb-1">
-                Email
-              </label>
-              <input
-                id="signup-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-4 py-3 bg-terminal-black/50 border border-terminal-fg/20 rounded-lg text-terminal-fg placeholder:text-terminal-fg/30 focus:outline-none focus:border-terminal-blue transition-colors"
-                autoFocus
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="signup-password" className="block text-sm text-terminal-fg/80 mb-1">
-                Password
-              </label>
-              <input
-                id="signup-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                className="w-full px-4 py-3 bg-terminal-black/50 border border-terminal-fg/20 rounded-lg text-terminal-fg placeholder:text-terminal-fg/30 focus:outline-none focus:border-terminal-blue transition-colors"
-                autoComplete="new-password"
-              />
-              <p className="mt-1 text-xs text-terminal-fg/40">
-                Must contain uppercase, lowercase, and numbers
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="confirm-password" className="block text-sm text-terminal-fg/80 mb-1">
-                Confirm Password
-              </label>
-              <input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                className="w-full px-4 py-3 bg-terminal-black/50 border border-terminal-fg/20 rounded-lg text-terminal-fg placeholder:text-terminal-fg/30 focus:outline-none focus:border-terminal-blue transition-colors"
-                autoComplete="new-password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 bg-terminal-blue hover:bg-terminal-blue/80 disabled:bg-terminal-blue/50 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                  Creating account...
-                </>
-              ) : (
-                'Create Account'
-              )}
-            </button>
-
-            <div className="text-center text-sm">
-              <span className="text-terminal-fg/60">Already have an account? </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login');
-                  setError(null);
-                  setMessage(null);
-                  setPassword('');
-                  setConfirmPassword('');
-                }}
-                className="text-terminal-blue hover:text-terminal-blue/80 transition-colors"
-              >
-                Sign in
               </button>
             </div>
           </form>
