@@ -38,10 +38,16 @@ fi
 
 # Clone or update
 INSTALL_DIR="$HOME/.always-coder"
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Updating existing installation..."
   cd "$INSTALL_DIR"
   git pull
+elif [ -d "$INSTALL_DIR" ]; then
+  echo "Removing invalid installation..."
+  rm -rf "$INSTALL_DIR"
+  echo "Cloning repository..."
+  git clone https://github.com/tyyzqmf/always-coder.git "$INSTALL_DIR"
+  cd "$INSTALL_DIR"
 else
   echo "Cloning repository..."
   git clone https://github.com/tyyzqmf/always-coder.git "$INSTALL_DIR"
