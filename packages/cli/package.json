@@ -1,20 +1,41 @@
 {
   "name": "@always-coder/cli",
   "version": "1.0.0",
-  "private": true,
+  "description": "Remote AI coding agent control - access Claude, Codex, and other AI assistants from anywhere",
   "type": "module",
   "bin": {
     "always": "./dist/index.js"
+  },
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "remote",
+    "terminal",
+    "pty",
+    "websocket",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tyyzqmf/always-coder.git",
+    "directory": "packages/cli"
+  },
+  "author": "tyyzqmf",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc && chmod +x dist/index.js",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@always-coder/shared": "workspace:*",
+    "@always-coder/shared": "^1.0.0",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "node-pty": "^1.0.0",
