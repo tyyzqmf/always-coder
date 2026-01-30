@@ -66,7 +66,7 @@ mkdir -p "$HOME/.local/bin"
 
 cat > "$HOME/.local/bin/always" << 'EOF'
 #!/bin/bash
-cd "$HOME/.always-coder" && node packages/cli/dist/index.js "$@"
+node "$HOME/.always-coder/packages/cli/dist/index.js" "$@"
 EOF
 
 chmod +x "$HOME/.local/bin/always"
