@@ -4,17 +4,21 @@ Remote AI coding agent control - access Claude, Codex and other AI assistants fr
 
 ## Quick Start (New Machine)
 
+**One-liner install:**
 ```bash
-# 1. Clone and install
-git clone https://github.com/tyyzqmf/always-coder.git
-cd always-coder
-pnpm install && pnpm build:cli
+curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
+```
 
-# 2. Configure server and web URL
-pnpm always init <server-url> <web-url>
+**Then run:**
+```bash
+cd ~/always-coder && pnpm always claude
+```
 
-# 3. Run
-pnpm always claude
+**Optional: Add alias for convenience:**
+```bash
+echo 'alias always="cd ~/always-coder && pnpm always"' >> ~/.bashrc
+source ~/.bashrc
+always claude
 ```
 
 ## CLI Commands
