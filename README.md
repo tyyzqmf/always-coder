@@ -2,25 +2,31 @@
 
 Remote AI coding agent control - access Claude, Codex and other AI assistants from anywhere via encrypted WebSocket.
 
-## Quick Start
+## Quick Start (New Machine)
 
 ```bash
+# 1. Clone and setup
 git clone https://github.com/tyyzqmf/always-coder.git
 cd always-coder
-pnpm install && pnpm build:cli
-pnpm always config set server wss://your-api.execute-api.region.amazonaws.com/prod
+pnpm setup
+
+# 2. Configure server and web URL
+pnpm always init <server-url> <web-url>
+
+# 3. Run
 pnpm always claude
 ```
 
 ## CLI Commands
 
 ```bash
-always claude                    # Interactive mode
-always claude --daemon           # Background mode
-always sessions                  # List active sessions
-always stop <id>                 # Stop a session
-always clean                     # Stop all sessions
-always config set server <url>   # Set server URL
+pnpm always claude                      # Interactive mode
+pnpm always claude --daemon             # Background mode
+pnpm always sessions                    # List active sessions
+pnpm always stop <id>                   # Stop a session
+pnpm always clean                       # Stop all sessions
+pnpm always config list                 # Show configuration
+pnpm always init <server> <webUrl>      # Quick config setup
 ```
 
 ## Development
