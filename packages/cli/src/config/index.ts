@@ -14,11 +14,11 @@ export interface Config {
 }
 
 /**
- * Default configuration
+ * Default configuration (empty - must be configured by user)
  */
 const DEFAULT_CONFIG: Config = {
-  server: 'wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod',
-  webUrl: 'https://d3eiysbs2sqijx.cloudfront.net',
+  server: '',
+  webUrl: '',
 };
 
 /**

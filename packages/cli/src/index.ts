@@ -252,6 +252,20 @@ configCmd
     });
   });
 
+// Init command - quick setup for server and webUrl
+program
+  .command('init <server> <webUrl>')
+  .description('Initialize configuration with server and web URL')
+  .action((server: string, webUrl: string) => {
+    setConfigValue('server', server);
+    setConfigValue('webUrl', webUrl);
+    console.log(chalk.green('✓ Configuration initialized'));
+    console.log(chalk.gray(`  server: ${server}`));
+    console.log(chalk.gray(`  webUrl: ${webUrl}`));
+    console.log('');
+    console.log(chalk.cyan('You can now run: pnpm always claude'));
+  });
+
 // Login command (placeholder for Cognito integration)
 program
   .command('login')
