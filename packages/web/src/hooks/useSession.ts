@@ -6,6 +6,9 @@ import { useSessionStore } from '@/stores/session';
 import { useCrypto } from './useCrypto';
 import { useWebSocket } from './useWebSocket';
 
+// Maximum consecutive decryption failures before alerting user
+const MAX_DECRYPTION_FAILURES = 3;
+
 interface UseSessionOptions {
   onTerminalOutput?: (data: string) => void;
   onStateSync?: (state: { cols: number; rows: number }) => void;
@@ -23,14 +26,30 @@ export function useSession(options: UseSessionOptions = {}) {
     reset,
   } = useSessionStore();
 
-  const { getPublicKey, establishSharedKey, isReady, encrypt, decrypt, clearCrypto } = useCrypto();
+  const {
+    getPublicKey,
+    establishSharedKey,
+    reestablishSharedKey,
+    isCliKeyChanged,
+    isReady,
+    encrypt,
+    decrypt,
+    clearCrypto,
+  } = useCrypto();
+
   const seqRef = useRef(0);
+  const decryptionFailuresRef = useRef(0);
 
   const handleEncrypted = useCallback((envelope: EncryptedEnvelope) => {
-    if (!isReady()) return;
+    if (!isReady()) {
+      console.warn('Received encrypted message before encryption is ready');
+      return;
+    }
 
     try {
       const message = decrypt(envelope);
+      // Reset failure counter on successful decryption
+      decryptionFailuresRef.current = 0;
 
       switch (message.type) {
         case MessageType.TERMINAL_OUTPUT:
@@ -45,22 +64,51 @@ export function useSession(options: UseSessionOptions = {}) {
           console.log('Unknown message type:', message.type);
       }
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      decryptionFailuresRef.current++;
+      console.error('Failed to decrypt message:', error, {
+        consecutiveFailures: decryptionFailuresRef.current,
+        maxFailures: MAX_DECRYPTION_FAILURES,
+      });
+
+      // Alert user after multiple consecutive failures - could indicate key mismatch or attack
+      if (decryptionFailuresRef.current >= MAX_DECRYPTION_FAILURES) {
+        setError(
+          'Failed to decrypt multiple messages. The encryption keys may be out of sync. ' +
+          'Please refresh the page or scan the QR code again.'
+        );
+        // Clear crypto state to force re-establishment on next connection
+        clearCrypto();
+      }
     }
-  }, [isReady, decrypt, options]);
+  }, [isReady, decrypt, options, setError, clearCrypto]);
 
   const handleSessionJoined = useCallback((data: { sessionId: string; cliPublicKey: string }) => {
     console.log('Session joined:', data.sessionId);
     setCliPublicKey(data.cliPublicKey);
 
-    // Only establish shared key if not already ready (handles reconnection case)
-    if (!isReady()) {
+    // Check if CLI's public key changed (CLI was restarted)
+    if (isCliKeyChanged(data.cliPublicKey)) {
+      console.log('CLI public key changed, re-establishing shared key');
+      reestablishSharedKey(data.cliPublicKey);
+    } else if (!isReady()) {
+      // First time establishing shared key
       establishSharedKey(data.cliPublicKey);
     }
+    // If isReady() and key hasn't changed, we're reconnecting with stored shared key
 
+    // Reset decryption failure counter on successful connection
+    decryptionFailuresRef.current = 0;
     setEncryptionReady(true);
     setConnectionStatus('connected');
-  }, [setCliPublicKey, establishSharedKey, setEncryptionReady, setConnectionStatus, isReady]);
+  }, [
+    setCliPublicKey,
+    isCliKeyChanged,
+    reestablishSharedKey,
+    establishSharedKey,
+    setEncryptionReady,
+    setConnectionStatus,
+    isReady,
+  ]);
 
   const handleCliDisconnected = useCallback(() => {
     setError('CLI disconnected');
@@ -105,19 +153,21 @@ export function useSession(options: UseSessionOptions = {}) {
       await connect();
 
       // Check if we have stored encryption state (page refresh scenario)
-      // The shared key was already restored from sessionStorage by WebCrypto
+      // Note: The shared key may have been restored from sessionStorage.
+      // The actual validation of CLI's key happens in handleSessionJoined.
       if (isReconnect && isReady()) {
         console.log('Reconnecting with stored encryption state');
         setEncryptionReady(true);
       }
 
       // Always send SESSION_JOIN to server - it will handle both new connections
-      // and reconnections (after page refresh). Server uses the same public key
-      // to verify the web client.
+      // and reconnections (after page refresh). Note: We always send a fresh public key
+      // since we regenerate our keypair on each page load for security.
       joinSession(targetSessionId, getPublicKey());
     } catch (error) {
       console.error('Failed to connect:', error);
       setError('Failed to connect to server');
+      setConnectionStatus('error');
     }
   }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError, isReady, setEncryptionReady]);
 

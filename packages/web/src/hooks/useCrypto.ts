@@ -7,10 +7,10 @@ import type { EncryptedEnvelope, Message } from '@always-coder/shared';
 export function useCrypto() {
   const cryptoRef = useRef<WebCrypto | null>(null);
 
-  // Initialize crypto lazily, restoring from sessionStorage if available
+  // Initialize crypto lazily, restoring shared key from sessionStorage if available.
+  // Note: Private key is NEVER stored - only the derived shared key is persisted.
   const getCrypto = useCallback(() => {
     if (!cryptoRef.current) {
-      // Will automatically restore keypair and sharedKey from sessionStorage
       cryptoRef.current = new WebCrypto(true);
     }
     return cryptoRef.current;
@@ -22,6 +22,21 @@ export function useCrypto() {
 
   const establishSharedKey = useCallback((cliPublicKey: string) => {
     getCrypto().establishSharedKey(cliPublicKey);
+  }, [getCrypto]);
+
+  // Force re-establishment of shared key (e.g., when CLI restarted with new keys)
+  const reestablishSharedKey = useCallback((cliPublicKey: string) => {
+    getCrypto().reestablishSharedKey(cliPublicKey);
+  }, [getCrypto]);
+
+  // Check if CLI's public key changed since we stored the shared key
+  const isCliKeyChanged = useCallback((cliPublicKey: string) => {
+    return getCrypto().isCliKeyChanged(cliPublicKey);
+  }, [getCrypto]);
+
+  // Get the stored CLI public key for comparison
+  const getStoredCliPublicKey = useCallback(() => {
+    return getCrypto().getStoredCliPublicKey();
   }, [getCrypto]);
 
   // Check if crypto is ready (has shared key from either restoration or establishment)
@@ -46,6 +61,9 @@ export function useCrypto() {
   return {
     getPublicKey,
     establishSharedKey,
+    reestablishSharedKey,
+    isCliKeyChanged,
+    getStoredCliPublicKey,
     isReady,
     encrypt,
     decrypt,
