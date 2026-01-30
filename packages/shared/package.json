@@ -1,8 +1,21 @@
 {
   "name": "@always-coder/shared",
   "version": "1.0.0",
-  "private": true,
+  "description": "Shared types, crypto, and protocol definitions for Always Coder",
   "type": "module",
+  "keywords": [
+    "always-coder",
+    "shared",
+    "crypto",
+    "e2e-encryption"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tyyzqmf/always-coder.git",
+    "directory": "packages/shared"
+  },
+  "author": "tyyzqmf",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
