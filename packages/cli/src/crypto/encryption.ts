@@ -13,6 +13,7 @@ export class EncryptionManager {
   private crypto: E2ECrypto;
   private sessionId: string;
   private sequenceNumber: number = 0;
+  private webPublicKey: string | null = null;
 
   constructor(sessionId?: string) {
     this.crypto = new E2ECrypto();
@@ -45,6 +46,22 @@ export class EncryptionManager {
    */
   establishSharedKey(webPublicKey: string): void {
     this.crypto.establishSharedKey(webPublicKey);
+    this.webPublicKey = webPublicKey;
+  }
+
+  /**
+   * Check if the web public key has changed (web client refreshed and has new keypair)
+   */
+  isWebKeyChanged(newWebPublicKey: string): boolean {
+    return this.webPublicKey !== null && this.webPublicKey !== newWebPublicKey;
+  }
+
+  /**
+   * Re-establish shared key with new web public key (for reconnection with new keypair)
+   */
+  reestablishSharedKey(webPublicKey: string): void {
+    this.crypto.establishSharedKey(webPublicKey);
+    this.webPublicKey = webPublicKey;
   }
 
   /**
