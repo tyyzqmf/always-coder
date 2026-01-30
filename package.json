@@ -7,7 +7,7 @@
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "build:cli": "pnpm --filter @always-coder/shared build && pnpm --filter @always-coder/cli build",
-    "setup": "pnpm install && pnpm build:cli && echo '✓ Setup complete! Run: pnpm always claude'",
+    "bootstrap": "pnpm install && pnpm build:cli && echo '✓ Setup complete! Run: pnpm always claude'",
     "test": "pnpm -r test",
     "test:integration": "pnpm -r test:integration",
     "lint": "pnpm -r lint",
