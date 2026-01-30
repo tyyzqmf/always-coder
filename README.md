@@ -11,7 +11,7 @@ cd always-coder
 pnpm install && pnpm build:cli
 
 # Configure server
-node packages/cli/dist/index.js config set server wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod
+node packages/cli/dist/index.js config set server wss://your-api.execute-api.region.amazonaws.com/prod
 
 # Run
 node packages/cli/dist/index.js claude
@@ -19,7 +19,7 @@ node packages/cli/dist/index.js claude
 
 **One-liner:**
 ```bash
-git clone https://github.com/tyyzqmf/always-coder.git && cd always-coder && pnpm install && pnpm build:cli && node packages/cli/dist/index.js config set server wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod && node packages/cli/dist/index.js claude
+git clone https://github.com/tyyzqmf/always-coder.git && cd always-coder && pnpm install && pnpm build:cli && node packages/cli/dist/index.js config set server wss://your-api.execute-api.region.amazonaws.com/prod && node packages/cli/dist/index.js claude
 ```
 
 ## CLI Commands
