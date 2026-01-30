@@ -89,6 +89,9 @@ export class ApiStack extends cdk.Stack {
         ],
       },
       preventUserExistenceErrors: true,
+      accessTokenValidity: cdk.Duration.days(1),
+      idTokenValidity: cdk.Duration.days(1),
+      refreshTokenValidity: cdk.Duration.days(30),
     });
 
     // ==================== Common Lambda Environment ====================
