@@ -115,10 +115,17 @@ export async function deleteSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Check if a session is valid and active
+ * Check if a session is valid and can accept web connections
+ * PENDING: CLI created session, waiting for web
+ * ACTIVE: CLI and web connected
+ * PAUSED: Web disconnected, CLI still active (can reconnect)
  */
 export async function isSessionActive(sessionId: string): Promise<boolean> {
   const session = await getSession(sessionId);
   if (!session) return false;
-  return session.status === SessionStatus.PENDING || session.status === SessionStatus.ACTIVE;
+  return (
+    session.status === SessionStatus.PENDING ||
+    session.status === SessionStatus.ACTIVE ||
+    session.status === SessionStatus.PAUSED
+  );
 }

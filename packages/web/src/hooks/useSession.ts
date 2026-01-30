@@ -20,9 +20,10 @@ export function useSession(options: UseSessionOptions = {}) {
     setConnectionStatus,
     setEncryptionReady,
     setError,
+    reset,
   } = useSessionStore();
 
-  const { getPublicKey, establishSharedKey, isReady, encrypt, decrypt } = useCrypto();
+  const { getPublicKey, establishSharedKey, isReady, encrypt, decrypt, clearCrypto } = useCrypto();
   const seqRef = useRef(0);
 
   const handleEncrypted = useCallback((envelope: EncryptedEnvelope) => {
@@ -51,10 +52,15 @@ export function useSession(options: UseSessionOptions = {}) {
   const handleSessionJoined = useCallback((data: { sessionId: string; cliPublicKey: string }) => {
     console.log('Session joined:', data.sessionId);
     setCliPublicKey(data.cliPublicKey);
-    establishSharedKey(data.cliPublicKey);
+
+    // Only establish shared key if not already ready (handles reconnection case)
+    if (!isReady()) {
+      establishSharedKey(data.cliPublicKey);
+    }
+
     setEncryptionReady(true);
     setConnectionStatus('connected');
-  }, [setCliPublicKey, establishSharedKey, setEncryptionReady, setConnectionStatus]);
+  }, [setCliPublicKey, establishSharedKey, setEncryptionReady, setConnectionStatus, isReady]);
 
   const handleCliDisconnected = useCallback(() => {
     setError('CLI disconnected');
@@ -68,25 +74,52 @@ export function useSession(options: UseSessionOptions = {}) {
     }
   }, [setConnectionStatus]);
 
+  const handleServerError = useCallback((code: string, message: string) => {
+    console.error('Server error:', code, message);
+
+    // If session not found, clear stored state so user can start fresh
+    if (code === 'SESSION_NOT_FOUND') {
+      clearCrypto();
+      reset();
+      setError('Session not found or expired. Please scan the QR code again.');
+    } else if (code === 'CONNECTION_FAILED') {
+      setError('CLI is not connected. Please ensure the CLI is running.');
+    } else {
+      setError(message || 'An error occurred');
+    }
+  }, [clearCrypto, reset, setError]);
+
   const { connect, disconnect, joinSession, sendEncrypted } = useWebSocket({
     onSessionJoined: handleSessionJoined,
     onEncrypted: handleEncrypted,
     onCliDisconnected: handleCliDisconnected,
     onStatusChange: handleStatusChange,
+    onServerError: handleServerError,
   });
 
-  const connectToSession = useCallback(async (targetSessionId: string) => {
+  const connectToSession = useCallback(async (targetSessionId: string, isReconnect = false) => {
     setSessionId(targetSessionId);
     setConnectionStatus('connecting');
 
     try {
       await connect();
+
+      // Check if we have stored encryption state (page refresh scenario)
+      // The shared key was already restored from sessionStorage by WebCrypto
+      if (isReconnect && isReady()) {
+        console.log('Reconnecting with stored encryption state');
+        setEncryptionReady(true);
+      }
+
+      // Always send SESSION_JOIN to server - it will handle both new connections
+      // and reconnections (after page refresh). Server uses the same public key
+      // to verify the web client.
       joinSession(targetSessionId, getPublicKey());
     } catch (error) {
       console.error('Failed to connect:', error);
       setError('Failed to connect to server');
     }
-  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError]);
+  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError, isReady, setEncryptionReady]);
 
   const sendInput = useCallback((data: string) => {
     if (!isReady() || !sessionId) return;
@@ -114,10 +147,16 @@ export function useSession(options: UseSessionOptions = {}) {
     sendEncrypted(envelope);
   }, [isReady, sessionId, encrypt, sendEncrypted]);
 
-  const disconnectSession = useCallback(() => {
+  const disconnectSession = useCallback((clearState = false) => {
     disconnect();
     setConnectionStatus('disconnected');
-  }, [disconnect, setConnectionStatus]);
+
+    // Optionally clear all stored state (e.g., when user explicitly disconnects)
+    if (clearState) {
+      clearCrypto();
+      reset();
+    }
+  }, [disconnect, setConnectionStatus, clearCrypto, reset]);
 
   return {
     sessionId,

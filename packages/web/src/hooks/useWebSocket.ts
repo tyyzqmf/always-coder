@@ -11,6 +11,7 @@ interface UseWebSocketOptions {
   onEncrypted?: (envelope: EncryptedEnvelope) => void;
   onCliDisconnected?: () => void;
   onStatusChange?: (connected: boolean) => void;
+  onServerError?: (code: string, message: string) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -37,6 +38,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       onSessionJoined: (data) => optionsRef.current.onSessionJoined?.(data),
       onEncrypted: (envelope) => optionsRef.current.onEncrypted?.(envelope),
       onCliDisconnected: () => optionsRef.current.onCliDisconnected?.(),
+      onServerError: (code, message) => optionsRef.current.onServerError?.(code, message),
     });
 
     wsRef.current = ws;

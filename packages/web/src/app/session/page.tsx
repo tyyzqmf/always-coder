@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useCallback, useState } from 'react';
+import { Suspense, useEffect, useCallback, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { TerminalToolbar } from '@/components/Terminal/TerminalToolbar';
@@ -17,11 +17,18 @@ function SessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const sessionId = searchParams.get('id');
+  const sessionIdFromUrl = searchParams.get('id');
   const publicKey = searchParams.get('key');
 
-  const { connectionStatus, errorMessage } = useSessionStore();
+  // Get stored session state (for reconnection after refresh)
+  const { connectionStatus, errorMessage, sessionId: storedSessionId, cliPublicKey: storedCliPublicKey } = useSessionStore();
   const [initialized, setInitialized] = useState(false);
+
+  // Use URL session ID, or fall back to stored session ID (for reconnection)
+  const sessionId = sessionIdFromUrl || storedSessionId;
+
+  // Detect if this is a reconnection scenario (have stored encryption state)
+  const isReconnect = !!(storedSessionId && storedCliPublicKey && sessionId === storedSessionId);
 
   // Handle terminal output from CLI
   const handleTerminalOutput = useCallback((data: string) => {
@@ -39,24 +46,59 @@ function SessionContent() {
     onStateSync: handleStateSync,
   });
 
-  // Connect to session on mount
+  // Store functions in refs to avoid dependency issues causing reconnects
+  const connectRef = useRef(connectToSession);
+  connectRef.current = connectToSession;
+  const disconnectRef = useRef(disconnectSession);
+  disconnectRef.current = disconnectSession;
+
+  // Track if we've started connecting to avoid double connections
+  const hasConnectedRef = useRef(false);
+  // Track if component is mounted to prevent cleanup during StrictMode double-render
+  const isMountedRef = useRef(true);
+
+  // Store session params in ref for use in effects
+  const sessionParamsRef = useRef({ sessionId, publicKey, isReconnect });
+  sessionParamsRef.current = { sessionId, publicKey, isReconnect };
+
+  // Connect to session - runs only once on mount
   useEffect(() => {
-    if (!sessionId || !publicKey) {
+    isMountedRef.current = true;
+
+    const { sessionId, publicKey, isReconnect } = sessionParamsRef.current;
+
+    // For initial connection, need both sessionId and publicKey from URL
+    // For reconnection, only need sessionId (either from URL or stored)
+    if (!sessionId) {
       router.push('/join');
       return;
     }
 
-    if (!initialized) {
-      setInitialized(true);
-      connectToSession(sessionId);
+    // If no public key in URL and not a reconnection scenario, redirect
+    if (!publicKey && !isReconnect) {
+      router.push('/join');
+      return;
     }
 
+    // Only connect once per component lifecycle
+    if (!hasConnectedRef.current) {
+      hasConnectedRef.current = true;
+      console.log('Connecting to session:', { sessionId, isReconnect });
+      connectRef.current(sessionId, isReconnect);
+    }
+
+    // Cleanup on unmount - use setTimeout to allow React StrictMode to re-mount
     return () => {
-      if (initialized) {
-        disconnectSession();
-      }
+      isMountedRef.current = false;
+      // Delay cleanup slightly to allow StrictMode re-mount
+      setTimeout(() => {
+        if (!isMountedRef.current) {
+          hasConnectedRef.current = false;
+          disconnectRef.current(false);
+        }
+      }, 100);
     };
-  }, [sessionId, publicKey, initialized, connectToSession, disconnectSession, router]);
+  }, [router]); // Only depend on router for navigation
 
   // Handle terminal input
   const handleTerminalData = useCallback((data: string) => {
@@ -68,14 +110,14 @@ function SessionContent() {
     sendResize(cols, rows);
   }, [sendResize]);
 
-  // Handle disconnect
+  // Handle disconnect - clear all state when user explicitly disconnects
   const handleDisconnect = useCallback(() => {
-    disconnectSession();
+    disconnectSession(true); // Clear stored state
     router.push('/');
   }, [disconnectSession, router]);
 
-  // Validate params
-  if (!sessionId || !publicKey) {
+  // Validate params - need sessionId (and either publicKey for initial connection or stored state for reconnection)
+  if (!sessionId || (!publicKey && !isReconnect)) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-terminal-bg">
         <div className="text-center">
