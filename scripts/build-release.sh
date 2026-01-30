@@ -60,6 +60,7 @@ bun build packages/cli/dist/index.js \
   --target=node \
   --format=esm \
   --external node-pty \
+  --external ws \
   --minify
 
 # Fix shebang (Bun adds #!/usr/bin/env bun, we want node for portability)
@@ -67,25 +68,31 @@ sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' "$BUNDLE_DIR/cli.js"
 chmod +x "$BUNDLE_DIR/cli.js"
 echo -e "${GREEN}✓${NC} Bundle created ($(du -h "$BUNDLE_DIR/cli.js" | cut -f1))"
 
-# Step 3: Copy node-pty native module
+# Step 3: Copy external modules (node-pty, ws)
 echo ""
-echo -e "${CYAN}[3/5]${NC} Copying native modules..."
+echo -e "${CYAN}[3/5]${NC} Copying external modules..."
 
-# Find node-pty (pnpm stores in .pnpm directory)
-NODE_PTY_DIR=$(find "$ROOT_DIR/node_modules" -path "*/node-pty" -type d | grep -v ".pnpm" | head -1)
-if [ -z "$NODE_PTY_DIR" ]; then
-  NODE_PTY_DIR=$(find "$ROOT_DIR/node_modules/.pnpm" -path "*/node-pty" -name "node-pty" -type d | head -1)
-fi
+# Function to find package in pnpm structure
+find_package() {
+  local pkg_name=$1
+  # First try to find in .pnpm with version pattern (most reliable)
+  local pkg_dir=$(find "$ROOT_DIR/node_modules/.pnpm" -path "*/${pkg_name}@*/node_modules/${pkg_name}" -type d | head -1)
+  # Fallback to regular node_modules
+  if [ -z "$pkg_dir" ]; then
+    pkg_dir=$(find "$ROOT_DIR/node_modules" -path "*/$pkg_name" -type d ! -path "*/.pnpm/*" ! -path "*/@types/*" | head -1)
+  fi
+  echo "$pkg_dir"
+}
+
+# Copy node-pty
+NODE_PTY_DIR=$(find_package "node-pty")
 if [ -z "$NODE_PTY_DIR" ] || [ ! -d "$NODE_PTY_DIR" ]; then
   echo -e "${RED}Error: node-pty not found in node_modules${NC}"
   exit 1
 fi
 echo -e "${GREEN}✓${NC} Found node-pty at: $NODE_PTY_DIR"
 
-# Create node_modules structure
 mkdir -p "$BUNDLE_DIR/node_modules/node-pty"
-
-# Copy essential node-pty files
 cp "$NODE_PTY_DIR/package.json" "$BUNDLE_DIR/node_modules/node-pty/"
 cp -r "$NODE_PTY_DIR/lib" "$BUNDLE_DIR/node_modules/node-pty/"
 
@@ -94,21 +101,31 @@ PREBUILD_DIR="$NODE_PTY_DIR/prebuilds/$PLATFORM"
 if [ -d "$PREBUILD_DIR" ]; then
   mkdir -p "$BUNDLE_DIR/node_modules/node-pty/prebuilds/$PLATFORM"
   cp -r "$PREBUILD_DIR/"* "$BUNDLE_DIR/node_modules/node-pty/prebuilds/$PLATFORM/"
-  echo -e "${GREEN}✓${NC} Native module copied for $PLATFORM"
+  echo -e "${GREEN}✓${NC} node-pty prebuilds copied for $PLATFORM"
 else
-  echo -e "${YELLOW}!${NC} No prebuild for $PLATFORM, attempting to build..."
-
-  # List available prebuilds
-  echo "Available prebuilds:"
-  ls -la "$NODE_PTY_DIR/prebuilds/" 2>/dev/null || echo "  (none found)"
-
-  # Try to copy build artifacts
+  echo -e "${YELLOW}!${NC} No prebuild for $PLATFORM, copying build artifacts..."
   if [ -d "$NODE_PTY_DIR/build/Release" ]; then
     mkdir -p "$BUNDLE_DIR/node_modules/node-pty/build/Release"
     cp "$NODE_PTY_DIR/build/Release/"*.node "$BUNDLE_DIR/node_modules/node-pty/build/Release/" 2>/dev/null || true
-    echo -e "${GREEN}✓${NC} Copied build artifacts"
+    echo -e "${GREEN}✓${NC} node-pty build artifacts copied"
   fi
 fi
+
+# Copy ws module
+WS_DIR=$(find_package "ws")
+if [ -z "$WS_DIR" ] || [ ! -d "$WS_DIR" ]; then
+  echo -e "${RED}Error: ws not found in node_modules${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓${NC} Found ws at: $WS_DIR"
+
+mkdir -p "$BUNDLE_DIR/node_modules/ws"
+cp "$WS_DIR/package.json" "$BUNDLE_DIR/node_modules/ws/"
+cp -r "$WS_DIR/lib" "$BUNDLE_DIR/node_modules/ws/"
+cp "$WS_DIR/index.js" "$BUNDLE_DIR/node_modules/ws/" 2>/dev/null || true
+cp "$WS_DIR/wrapper.mjs" "$BUNDLE_DIR/node_modules/ws/" 2>/dev/null || true
+cp "$WS_DIR/browser.js" "$BUNDLE_DIR/node_modules/ws/" 2>/dev/null || true
+echo -e "${GREEN}✓${NC} ws module copied"
 
 # Step 4: Create launcher script
 echo ""
