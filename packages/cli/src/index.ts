@@ -212,9 +212,12 @@ configCmd
     if (key === 'server') {
       setConfigValue('server', value);
       console.log(chalk.green(`✓ Set ${key} = ${value}`));
+    } else if (key === 'webUrl') {
+      setConfigValue('webUrl', value);
+      console.log(chalk.green(`✓ Set ${key} = ${value}`));
     } else {
       console.error(chalk.red(`Unknown config key: ${key}`));
-      console.log('Available keys: server');
+      console.log('Available keys: server, webUrl');
       process.exit(1);
     }
   });
@@ -226,8 +229,12 @@ configCmd
     if (key === 'server') {
       const value = getConfigValue('server');
       console.log(value);
+    } else if (key === 'webUrl') {
+      const value = getConfigValue('webUrl');
+      console.log(value);
     } else {
       console.error(chalk.red(`Unknown config key: ${key}`));
+      console.log('Available keys: server, webUrl');
       process.exit(1);
     }
   });
