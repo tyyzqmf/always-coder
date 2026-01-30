@@ -190,8 +190,17 @@ export class SessionManager extends EventEmitter {
 
           // Start the terminal now that we have a client
           this.startTerminal();
+        } else if (this.encryption.isWebKeyChanged(data.publicKey)) {
+          // Web client reconnected with a new keypair (page refresh)
+          // Re-establish shared key with the new public key
+          this.log(chalk.yellow('🔄 Web client has new keypair, re-establishing encryption...'));
+          this.encryption.reestablishSharedKey(data.publicKey);
+          this.log(chalk.green('✓ Encryption re-established'));
+
+          // Send buffered output to reconnecting client
+          this.sendBufferedOutput();
         } else {
-          // Send buffered output to late-joining client
+          // Same web public key - send buffered output to late-joining client
           this.sendBufferedOutput();
         }
 

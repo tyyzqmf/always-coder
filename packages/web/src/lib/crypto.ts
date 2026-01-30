@@ -17,10 +17,9 @@ interface RestoredState {
  *
  * Security model:
  * - Private key (secretKey) is NEVER persisted - regenerated on each page load
- * - Only the derived shared key is stored (session-specific, useless without knowing the session)
- * - CLI's public key is stored to detect if CLI restarted (requires re-establishing shared key)
- * - On page refresh: if CLI's public key matches, we can reuse the shared key
- * - If CLI restarted with new keys, we must re-derive the shared key
+ * - CLI's public key is stored to detect if CLI restarted (for logging purposes)
+ * - Since we always generate a fresh keypair, we MUST always derive a new shared key
+ * - The shared key depends on our private key, so restoring an old shared key is invalid
  */
 export class WebCrypto {
   private keyPair: nacl.BoxKeyPair;
@@ -34,9 +33,11 @@ export class WebCrypto {
     if (restoreFromStorage) {
       const restored = this.restoreFromStorage();
       if (restored) {
-        this.sharedKey = restored.sharedKey;
+        // Only restore CLI public key (for logging/debugging)
+        // Do NOT restore shared key - it was derived with our OLD private key
+        // and is mathematically invalid for our NEW private key
         this.storedCliPublicKey = restored.cliPublicKey;
-        console.log('Restored shared key from sessionStorage');
+        console.log('Restored CLI public key from sessionStorage (will re-derive shared key)');
       }
     }
   }
@@ -45,23 +46,16 @@ export class WebCrypto {
     if (typeof window === 'undefined') return null;
 
     try {
-      const storedSharedKey = sessionStorage.getItem(STORAGE_KEY_SHARED);
       const storedCliPublicKey = sessionStorage.getItem(STORAGE_KEY_CLI_PUBLIC);
 
-      if (!storedSharedKey || !storedCliPublicKey) {
+      if (!storedCliPublicKey) {
         return null;
       }
 
-      const sharedKey = decodeBase64(storedSharedKey);
-
-      // Validate shared key length
-      if (sharedKey.length !== nacl.box.sharedKeyLength) {
-        console.warn('Invalid shared key length in storage, clearing');
-        WebCrypto.clearStorage();
-        return null;
-      }
-
-      return { sharedKey, cliPublicKey: storedCliPublicKey };
+      // Note: We no longer restore/use the shared key since we always generate
+      // a new keypair and must derive a new shared key. The stored shared key
+      // (if any) was derived with our old private key and is invalid.
+      return { sharedKey: new Uint8Array(0), cliPublicKey: storedCliPublicKey };
     } catch (error) {
       console.error('Failed to restore crypto state:', error);
       WebCrypto.clearStorage();
