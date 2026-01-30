@@ -212,9 +212,12 @@ configCmd
     if (key === 'server') {
       setConfigValue('server', value);
       console.log(chalk.green(`✓ Set ${key} = ${value}`));
+    } else if (key === 'webUrl') {
+      setConfigValue('webUrl', value);
+      console.log(chalk.green(`✓ Set ${key} = ${value}`));
     } else {
       console.error(chalk.red(`Unknown config key: ${key}`));
-      console.log('Available keys: server');
+      console.log('Available keys: server, webUrl');
       process.exit(1);
     }
   });
@@ -226,8 +229,12 @@ configCmd
     if (key === 'server') {
       const value = getConfigValue('server');
       console.log(value);
+    } else if (key === 'webUrl') {
+      const value = getConfigValue('webUrl');
+      console.log(value);
     } else {
       console.error(chalk.red(`Unknown config key: ${key}`));
+      console.log('Available keys: server, webUrl');
       process.exit(1);
     }
   });
@@ -243,6 +250,20 @@ configCmd
         console.log(`  ${key}: ${value}`);
       }
     });
+  });
+
+// Init command - quick setup for server and webUrl
+program
+  .command('init <server> <webUrl>')
+  .description('Initialize configuration with server and web URL')
+  .action((server: string, webUrl: string) => {
+    setConfigValue('server', server);
+    setConfigValue('webUrl', webUrl);
+    console.log(chalk.green('✓ Configuration initialized'));
+    console.log(chalk.gray(`  server: ${server}`));
+    console.log(chalk.gray(`  webUrl: ${webUrl}`));
+    console.log('');
+    console.log(chalk.cyan('You can now run: pnpm always claude'));
   });
 
 // Login command (placeholder for Cognito integration)

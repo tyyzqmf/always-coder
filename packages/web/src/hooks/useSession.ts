@@ -86,15 +86,19 @@ export function useSession(options: UseSessionOptions = {}) {
     console.log('Session joined:', data.sessionId);
     setCliPublicKey(data.cliPublicKey);
 
-    // Check if CLI's public key changed (CLI was restarted)
+    // Always (re-)establish the shared key because:
+    // 1. We always generate a new keypair on page load (for security)
+    // 2. Even if CLI's public key is the same, our private key is different
+    // 3. CLI will also re-establish when it sees our new public key
     if (isCliKeyChanged(data.cliPublicKey)) {
       console.log('CLI public key changed, re-establishing shared key');
       reestablishSharedKey(data.cliPublicKey);
-    } else if (!isReady()) {
-      // First time establishing shared key
-      establishSharedKey(data.cliPublicKey);
+    } else {
+      // Either first time OR reconnecting with new keypair
+      // Either way, we need to establish/re-establish because our private key is new
+      console.log('Establishing shared key with current keypair');
+      reestablishSharedKey(data.cliPublicKey);
     }
-    // If isReady() and key hasn't changed, we're reconnecting with stored shared key
 
     // Reset decryption failure counter on successful connection
     decryptionFailuresRef.current = 0;
@@ -104,10 +108,8 @@ export function useSession(options: UseSessionOptions = {}) {
     setCliPublicKey,
     isCliKeyChanged,
     reestablishSharedKey,
-    establishSharedKey,
     setEncryptionReady,
     setConnectionStatus,
-    isReady,
   ]);
 
   const handleCliDisconnected = useCallback(() => {
@@ -145,31 +147,23 @@ export function useSession(options: UseSessionOptions = {}) {
     onServerError: handleServerError,
   });
 
-  const connectToSession = useCallback(async (targetSessionId: string, isReconnect = false) => {
+  const connectToSession = useCallback(async (targetSessionId: string, _isReconnect = false) => {
     setSessionId(targetSessionId);
     setConnectionStatus('connecting');
 
     try {
       await connect();
 
-      // Check if we have stored encryption state (page refresh scenario)
-      // Note: The shared key may have been restored from sessionStorage.
-      // The actual validation of CLI's key happens in handleSessionJoined.
-      if (isReconnect && isReady()) {
-        console.log('Reconnecting with stored encryption state');
-        setEncryptionReady(true);
-      }
-
-      // Always send SESSION_JOIN to server - it will handle both new connections
-      // and reconnections (after page refresh). Note: We always send a fresh public key
-      // since we regenerate our keypair on each page load for security.
+      // Always send SESSION_JOIN to server with our fresh public key.
+      // Since we regenerate our keypair on each page load for security,
+      // the shared key will be established in handleSessionJoined.
       joinSession(targetSessionId, getPublicKey());
     } catch (error) {
       console.error('Failed to connect:', error);
       setError('Failed to connect to server');
       setConnectionStatus('error');
     }
-  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError, isReady, setEncryptionReady]);
+  }, [connect, joinSession, getPublicKey, setSessionId, setConnectionStatus, setError]);
 
   const sendInput = useCallback((data: string) => {
     if (!isReady() || !sessionId) return;
