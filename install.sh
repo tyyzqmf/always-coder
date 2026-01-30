@@ -56,11 +56,11 @@ fi
 
 # Install and build
 echo "Installing dependencies..."
-pnpm install --silent
+pnpm install
 
 echo "Building CLI..."
-pnpm --filter @always-coder/shared build --silent
-pnpm --filter @always-coder/cli build --silent
+pnpm --filter @always-coder/shared build
+pnpm --filter @always-coder/cli build
 
 # Configure
 echo "Configuring..."
