@@ -9,6 +9,7 @@ import {
   listDaemonSessions,
   stopDaemonSession,
   cleanupStaleSessions,
+  cleanAllSessions,
   isProcessRunning,
   waitForSession,
 } from './daemon/index.js';
@@ -284,6 +285,49 @@ program
     } else {
       console.log(chalk.yellow(`Session ${sessionId} not found or already stopped`));
     }
+  });
+
+// Clean command - stop all daemon sessions
+program
+  .command('clean')
+  .description('Stop and clean up all daemon sessions')
+  .option('-f, --force', 'Skip confirmation')
+  .action(async (options: { force?: boolean }) => {
+    const sessions = listDaemonSessions();
+
+    if (sessions.length === 0) {
+      console.log(chalk.yellow('No sessions to clean.'));
+      return;
+    }
+
+    if (!options.force) {
+      console.log(chalk.yellow(`This will stop ${sessions.length} session(s):`));
+      for (const session of sessions) {
+        console.log(chalk.gray(`  - ${session.sessionId} (PID: ${session.pid})`));
+      }
+      console.log('');
+
+      // Simple confirmation using readline
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      const answer = await new Promise<string>((resolve) => {
+        rl.question(chalk.yellow('Are you sure? (y/N) '), resolve);
+      });
+      rl.close();
+
+      if (answer.toLowerCase() !== 'y') {
+        console.log(chalk.gray('Cancelled.'));
+        return;
+      }
+    }
+
+    const result = cleanAllSessions();
+    console.log(chalk.green(`✓ Stopped ${result.stopped} running session(s)`));
+    console.log(chalk.green(`✓ Cleaned up ${result.cleaned} session record(s)`));
   });
 
 // Logs command - tail daemon session logs

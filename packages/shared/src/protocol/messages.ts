@@ -57,6 +57,21 @@ export function isSessionCreateRequest(
 }
 
 /**
+ * Type guard for session reconnect request
+ */
+export function isSessionReconnectRequest(
+  data: unknown
+): data is { type: MessageType.SESSION_RECONNECT; sessionId: string; publicKey: string } {
+  if (typeof data !== 'object' || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return (
+    msg.type === MessageType.SESSION_RECONNECT &&
+    typeof msg.sessionId === 'string' &&
+    typeof msg.publicKey === 'string'
+  );
+}
+
+/**
  * Type guard for session join request
  */
 export function isSessionJoinRequest(

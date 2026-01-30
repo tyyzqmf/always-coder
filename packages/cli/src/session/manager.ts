@@ -112,13 +112,10 @@ export class SessionManager extends EventEmitter {
     try {
       await this.wsClient.connect();
 
-      // Create session on server
-      this.wsClient.sendSessionCreate(
-        this.encryption.getSessionId(),
-        this.encryption.getPublicKey()
-      );
+      // Note: session create is now sent in the 'open' handler after initial connect
+      // This allows proper handling of reconnections
 
-      // Save daemon session info
+      // Save daemon session info (for first connect)
       if (this.isDaemon) {
         const webUrl = getWebUrl();
         const daemonSession: DaemonSession = {
@@ -155,8 +152,29 @@ export class SessionManager extends EventEmitter {
   private setupWebSocketHandlers(): void {
     if (!this.wsClient) return;
 
+    // Handle WebSocket open (first connect or reconnect)
+    this.wsClient.on('open', ({ isReconnect }: { isReconnect: boolean }) => {
+      if (isReconnect) {
+        this.log(chalk.yellow('🔄 WebSocket reconnected, re-registering session...'));
+        this.wsClient?.sendSessionReconnect(
+          this.encryption.getSessionId(),
+          this.encryption.getPublicKey()
+        );
+      } else {
+        // First connect - create session
+        this.wsClient?.sendSessionCreate(
+          this.encryption.getSessionId(),
+          this.encryption.getPublicKey()
+        );
+      }
+    });
+
     this.wsClient.on('session:created', () => {
       this.log(chalk.green('✓ Session created on server'));
+    });
+
+    this.wsClient.on('session:reconnected', () => {
+      this.log(chalk.green('✓ Session reconnected on server'));
     });
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {

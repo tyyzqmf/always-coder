@@ -84,6 +84,20 @@ export async function handleCliDisconnect(sessionId: string): Promise<Session | 
 }
 
 /**
+ * Handle CLI reconnection (update cliConnectionId)
+ */
+export async function reconnectSession(
+  sessionId: string,
+  newCliConnectionId: string
+): Promise<Session | null> {
+  return dbUpdateSession(sessionId, {
+    cliConnectionId: newCliConnectionId,
+    status: SessionStatus.PENDING, // Reset to pending until web reconnects
+    lastActiveAt: Date.now(),
+  });
+}
+
+/**
  * Update session status
  */
 export async function updateSessionStatus(

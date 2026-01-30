@@ -2,6 +2,7 @@ import type { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda';
 import {
   MessageType,
   isSessionCreateRequest,
+  isSessionReconnectRequest,
   isSessionJoinRequest,
   isEncryptedEnvelope,
   ErrorCodes,
@@ -12,6 +13,7 @@ import {
   getSession,
   joinSession,
   isSessionActive,
+  reconnectSession,
 } from '../services/session.js';
 import {
   initializeApiClient,
@@ -63,6 +65,11 @@ export const handler: APIGatewayProxyHandler = async (event): Promise<APIGateway
     // Handle session creation (from CLI)
     if (isSessionCreateRequest(body)) {
       return await handleSessionCreate(connectionId, body.sessionId, body.publicKey, endpoint, userId);
+    }
+
+    // Handle session reconnect (from CLI)
+    if (isSessionReconnectRequest(body)) {
+      return await handleSessionReconnect(connectionId, body.sessionId, body.publicKey, endpoint, userId);
     }
 
     // Handle session join (from Web)
@@ -126,6 +133,42 @@ async function handleSessionCreate(
   });
 
   return { statusCode: 200, body: 'Session created' };
+}
+
+/**
+ * Handle SESSION_RECONNECT from CLI (reconnecting after WebSocket dropped)
+ */
+async function handleSessionReconnect(
+  connectionId: string,
+  sessionId: string,
+  publicKey: string,
+  wsEndpoint: string,
+  userId: string
+): Promise<APIGatewayProxyResult> {
+  console.log('Reconnecting to session:', { sessionId, connectionId, userId });
+
+  // Check if session exists
+  const existing = await getSession(sessionId);
+  if (!existing) {
+    return sendError(connectionId, ErrorCodes.SESSION_NOT_FOUND, 'Session not found');
+  }
+
+  // Update the session with new CLI connectionId
+  await reconnectSession(sessionId, connectionId);
+
+  // Register the CLI connection with userId
+  await registerConnection(connectionId, sessionId, 'cli', publicKey, userId);
+
+  // Send confirmation to CLI
+  await sendToConnection(connectionId, {
+    type: MessageType.SESSION_RECONNECTED,
+    sessionId,
+    wsEndpoint,
+  });
+
+  console.log('Session reconnected successfully:', { sessionId, connectionId });
+
+  return { statusCode: 200, body: 'Session reconnected' };
 }
 
 /**

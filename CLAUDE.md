@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always Coder is a remote AI coding agent control system enabling secure terminal access to Claude, Codex, and other AI assistants via end-to-end encrypted WebSocket connections. The system uses a zero-knowledge architecture where the server never decrypts messages.
 
+All browser operations use: `chrome-devtools-mcp`.
+
 ## Monorepo Structure
 
 This is a pnpm workspace monorepo with 5 packages:
