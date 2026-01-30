@@ -4,9 +4,11 @@
 export enum MessageType {
   // Session management
   SESSION_CREATE = 'session:create',
+  SESSION_RECONNECT = 'session:reconnect',
   SESSION_JOIN = 'session:join',
   SESSION_LEAVE = 'session:leave',
   SESSION_CREATED = 'session:created',
+  SESSION_RECONNECTED = 'session:reconnected',
   SESSION_JOINED = 'session:joined',
   SESSION_ERROR = 'session:error',
 
@@ -65,6 +67,15 @@ export interface TerminalResizePayload {
  */
 export interface SessionCreateRequest {
   type: MessageType.SESSION_CREATE;
+  sessionId: string;
+  publicKey: string;
+}
+
+/**
+ * Session reconnect request (CLI reconnecting to existing session)
+ */
+export interface SessionReconnectRequest {
+  type: MessageType.SESSION_RECONNECT;
   sessionId: string;
   publicKey: string;
 }

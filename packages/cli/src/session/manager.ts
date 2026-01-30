@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { createWriteStream, type WriteStream } from 'fs';
+import { createWriteStream, appendFileSync, type WriteStream } from 'fs';
 import { MessageType, type EncryptedEnvelope } from '@always-coder/shared';
 import { WebSocketClient } from '../websocket/client.js';
 import { EncryptionManager } from '../crypto/encryption.js';
@@ -112,13 +112,10 @@ export class SessionManager extends EventEmitter {
     try {
       await this.wsClient.connect();
 
-      // Create session on server
-      this.wsClient.sendSessionCreate(
-        this.encryption.getSessionId(),
-        this.encryption.getPublicKey()
-      );
+      // Note: session create is now sent in the 'open' handler after initial connect
+      // This allows proper handling of reconnections
 
-      // Save daemon session info
+      // Save daemon session info (for first connect)
       if (this.isDaemon) {
         const webUrl = getWebUrl();
         const daemonSession: DaemonSession = {
@@ -127,7 +124,7 @@ export class SessionManager extends EventEmitter {
           command: this.options.command,
           args: this.options.args || [],
           startedAt: Date.now(),
-          webUrl: `${webUrl}/join?session=${this.encryption.getSessionId()}&key=${encodeURIComponent(this.encryption.getPublicKey())}`,
+          webUrl: `${webUrl}/join?id=${this.encryption.getSessionId()}&key=${encodeURIComponent(this.encryption.getPublicKey())}`,
           logFile: this.options.logFile || '',
         };
         saveDaemonSession(daemonSession);
@@ -155,8 +152,29 @@ export class SessionManager extends EventEmitter {
   private setupWebSocketHandlers(): void {
     if (!this.wsClient) return;
 
+    // Handle WebSocket open (first connect or reconnect)
+    this.wsClient.on('open', ({ isReconnect }: { isReconnect: boolean }) => {
+      if (isReconnect) {
+        this.log(chalk.yellow('🔄 WebSocket reconnected, re-registering session...'));
+        this.wsClient?.sendSessionReconnect(
+          this.encryption.getSessionId(),
+          this.encryption.getPublicKey()
+        );
+      } else {
+        // First connect - create session
+        this.wsClient?.sendSessionCreate(
+          this.encryption.getSessionId(),
+          this.encryption.getPublicKey()
+        );
+      }
+    });
+
     this.wsClient.on('session:created', () => {
       this.log(chalk.green('✓ Session created on server'));
+    });
+
+    this.wsClient.on('session:reconnected', () => {
+      this.log(chalk.green('✓ Session reconnected on server'));
     });
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {
@@ -286,9 +304,16 @@ export class SessionManager extends EventEmitter {
     this.terminal = new Terminal(terminalOptions);
 
     this.terminal.on('data', (data: string) => {
+      // In daemon mode, log terminal output for debugging
+      if (this.isDaemon && this.options.logFile) {
+        appendFileSync(this.options.logFile, `[${new Date().toISOString()}] TERMINAL DATA: ${JSON.stringify(data)}\n`);
+      }
+
       // Write to local stdout (only in interactive mode)
       if (!this.isDaemon) {
         process.stdout.write(data);
+      } else {
+        this.logStream?.write(`[TERMINAL] ${data}`);
       }
 
       // Buffer for late joiners
@@ -301,8 +326,8 @@ export class SessionManager extends EventEmitter {
       this.sendTerminalOutput(data);
     });
 
-    this.terminal.on('exit', (exitCode: number) => {
-      this.log(chalk.blue(`\n✓ Process exited with code ${exitCode}`));
+    this.terminal.on('exit', (exitCode: number, signal?: number) => {
+      this.log(chalk.blue(`\n✓ Process exited with code ${exitCode}, signal ${signal}`));
       this.emit('terminal:exit', exitCode);
       this.close();
     });
@@ -332,16 +357,8 @@ export class SessionManager extends EventEmitter {
 
     this.log(chalk.green('\n✓ Terminal started. You can now use it locally and remotely.\n'));
 
-    // Auto-accept trust dialog for claude/codex by sending Enter after a delay
-    // This accepts the default "Yes, I trust this folder" option
-    if (this.options.command === 'claude' || this.options.command === 'codex') {
-      setTimeout(() => {
-        if (this.terminal?.isRunning()) {
-          this.log(chalk.gray('   Auto-accepting trust dialog...'));
-          this.terminal.write('\r');  // Carriage return for Enter
-        }
-      }, 2000);  // Wait for dialog to appear
-    }
+    // Note: Auto-accept trust dialog is not needed when using --dangerously-skip-permissions
+    // The flag is automatically added for claude/codex commands
   }
 
   /**
@@ -366,11 +383,25 @@ export class SessionManager extends EventEmitter {
   private sendTerminalOutput(data: string): void {
     if (!this.wsClient || !this.encryption.isReady()) return;
 
+    const logFile = this.options.logFile;
+
     try {
+      if (this.isDaemon && logFile) {
+        appendFileSync(logFile, `[${new Date().toISOString()}] sendTerminalOutput START: ${data.length} bytes\n`);
+      }
       const envelope = this.encryption.encrypt(MessageType.TERMINAL_OUTPUT, data);
+      if (this.isDaemon && logFile) {
+        appendFileSync(logFile, `[${new Date().toISOString()}] Encrypted, sending...\n`);
+      }
       this.wsClient.sendEncrypted(envelope);
+      if (this.isDaemon && logFile) {
+        appendFileSync(logFile, `[${new Date().toISOString()}] Sent terminal output: ${data.length} bytes\n`);
+      }
     } catch (error) {
       console.error('Failed to send terminal output:', error);
+      if (this.isDaemon && logFile) {
+        appendFileSync(logFile, `[${new Date().toISOString()}] ERROR sending output: ${error}\n`);
+      }
     }
   }
 
@@ -423,6 +454,11 @@ export class SessionManager extends EventEmitter {
    * Close the session
    */
   close(): void {
+    // Log stack trace to debug unexpected closes
+    if (this.isDaemon) {
+      const stack = new Error().stack;
+      this.logStream?.write(`[${new Date().toISOString()}] CLOSE CALLED - Stack trace:\n${stack}\n`);
+    }
     this.log(chalk.blue('\n🔌 Closing session...'));
 
     // Delete daemon session info

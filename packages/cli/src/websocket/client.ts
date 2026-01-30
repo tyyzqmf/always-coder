@@ -10,11 +10,12 @@ import {
  * WebSocket client events
  */
 export interface WebSocketClientEvents {
-  open: () => void;
+  open: (data: { isReconnect: boolean }) => void;
   close: (code: number, reason: string) => void;
   error: (error: Error) => void;
   message: (data: unknown) => void;
   'session:created': (data: { sessionId: string; wsEndpoint: string }) => void;
+  'session:reconnected': (data: { sessionId: string; wsEndpoint: string }) => void;
   'web:connected': (data: { publicKey: string; connectionId: string }) => void;
   'web:disconnected': (data: { connectionId: string }) => void;
   encrypted: (envelope: EncryptedEnvelope) => void;
@@ -40,6 +41,7 @@ export class WebSocketClient extends EventEmitter {
   private maxReconnectAttempts: number = 10;
   private pingInterval: NodeJS.Timeout | null = null;
   private isClosing: boolean = false;
+  private hasConnectedBefore: boolean = false;
 
   constructor(options: WebSocketClientOptions | string) {
     super();
@@ -73,10 +75,12 @@ export class WebSocketClient extends EventEmitter {
         this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected');
+          const isReconnect = this.hasConnectedBefore;
+          console.log(isReconnect ? 'WebSocket reconnected' : 'WebSocket connected');
           this.reconnectAttempts = 0;
+          this.hasConnectedBefore = true;
           this.startPingInterval();
-          this.emit('open');
+          this.emit('open', { isReconnect });
           resolve();
         };
 
@@ -117,6 +121,8 @@ export class WebSocketClient extends EventEmitter {
       // Route based on message type
       if (message.type === MessageType.SESSION_CREATED) {
         this.emit('session:created', message);
+      } else if (message.type === MessageType.SESSION_RECONNECTED) {
+        this.emit('session:reconnected', message);
       } else if (message.type === 'web:connected') {
         this.emit('web:connected', message);
       } else if (message.type === 'web:disconnected') {
@@ -147,6 +153,17 @@ export class WebSocketClient extends EventEmitter {
   sendSessionCreate(sessionId: string, publicKey: string): void {
     this.send({
       type: MessageType.SESSION_CREATE,
+      sessionId,
+      publicKey,
+    });
+  }
+
+  /**
+   * Send session reconnect request
+   */
+  sendSessionReconnect(sessionId: string, publicKey: string): void {
+    this.send({
+      type: MessageType.SESSION_RECONNECT,
       sessionId,
       publicKey,
     });

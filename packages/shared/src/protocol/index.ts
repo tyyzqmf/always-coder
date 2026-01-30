@@ -3,6 +3,7 @@ export {
   createMessage,
   isEncryptedEnvelope,
   isSessionCreateRequest,
+  isSessionReconnectRequest,
   isSessionJoinRequest,
   ErrorCodes,
   type ErrorCode,

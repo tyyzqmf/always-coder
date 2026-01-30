@@ -1,6 +1,6 @@
 /**
  * Lambda@Edge function for Cognito JWT authentication
- * Validates JWT tokens from cookies and redirects unauthenticated users to Cognito Hosted UI
+ * Validates JWT tokens from cookies and redirects unauthenticated users to custom login page
  */
 
 import type {
@@ -17,12 +17,14 @@ const CONFIG = {
   COGNITO_DOMAIN: '__COGNITO_DOMAIN__',
   CALLBACK_PATH: '/auth/callback',
   LOGOUT_PATH: '/auth/logout',
+  LOGIN_PATH: '/login',
 };
 
 // Static assets that don't require authentication
 const STATIC_ASSET_EXTENSIONS = [
   '.js',
   '.css',
+  '.json',
   '.png',
   '.jpg',
   '.jpeg',
@@ -249,6 +251,24 @@ function isStaticAsset(uri: string): boolean {
 }
 
 /**
+ * Rewrite clean URLs to .html for Next.js static export
+ * e.g., /login -> /login.html, /join -> /join.html
+ */
+function rewriteCleanUrl(uri: string): string {
+  // Don't rewrite if already has extension, is root, or is a special path
+  if (
+    uri === '/' ||
+    uri.includes('.') ||
+    uri.startsWith('/auth/') ||
+    uri.startsWith('/_next/')
+  ) {
+    return uri;
+  }
+  // Add .html extension
+  return `${uri}.html`;
+}
+
+/**
  * Generate cookie to clear (expire immediately)
  */
 function generateClearCookie(name: string, path: string = '/'): string {
@@ -256,7 +276,7 @@ function generateClearCookie(name: string, path: string = '/'): string {
 }
 
 /**
- * Generate logout response - clears all auth cookies and redirects to Cognito logout
+ * Generate logout response - clears all auth cookies and redirects to login page
  */
 function generateLogoutResponse(request: CloudFrontRequest): CloudFrontRequestResult {
   const host = request.headers['host']?.[0]?.value || '';
@@ -270,19 +290,14 @@ function generateLogoutResponse(request: CloudFrontRequest): CloudFrontRequestRe
     { key: 'Set-Cookie', value: generateClearCookie('user_email') },
   ];
 
-  // Build Cognito logout URL - this will invalidate the Cognito session
-  // and redirect back to our app (which will then redirect to login)
-  // Note: Cognito hosted UI requires client_id, logout_uri AND redirect_uri
-  const logoutUrl = new URL(`https://${CONFIG.COGNITO_DOMAIN}/logout`);
-  logoutUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
-  logoutUrl.searchParams.set('logout_uri', `https://${host}`);
-  logoutUrl.searchParams.set('redirect_uri', `https://${host}`);
+  // Redirect to login page after clearing cookies
+  const loginUrl = `https://${host}${CONFIG.LOGIN_PATH}`;
 
   return {
     status: '302',
     statusDescription: 'Found',
     headers: {
-      location: [{ key: 'Location', value: logoutUrl.toString() }],
+      location: [{ key: 'Location', value: loginUrl }],
       'set-cookie': clearCookies,
       'cache-control': [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
     },
@@ -290,7 +305,7 @@ function generateLogoutResponse(request: CloudFrontRequest): CloudFrontRequestRe
 }
 
 /**
- * Generate redirect response to Cognito Hosted UI
+ * Generate redirect response to custom login page
  */
 function generateLoginRedirect(request: CloudFrontRequest): CloudFrontRequestResult {
   const host = request.headers['host']?.[0]?.value || '';
@@ -299,13 +314,8 @@ function generateLoginRedirect(request: CloudFrontRequest): CloudFrontRequestRes
   const querystring = request.querystring ? `?${request.querystring}` : '';
   const state = Buffer.from(JSON.stringify({ returnUrl: `${originalUrl}${querystring}` })).toString('base64');
 
-  const callbackUrl = `${protocol}://${host}${CONFIG.CALLBACK_PATH}`;
-
-  const loginUrl = new URL(`https://${CONFIG.COGNITO_DOMAIN}/login`);
-  loginUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
-  loginUrl.searchParams.set('response_type', 'code');
-  loginUrl.searchParams.set('scope', 'email openid profile');
-  loginUrl.searchParams.set('redirect_uri', callbackUrl);
+  // Redirect to custom login page with return URL in state
+  const loginUrl = new URL(`${protocol}://${host}${CONFIG.LOGIN_PATH}`);
   loginUrl.searchParams.set('state', state);
 
   return {
@@ -323,15 +333,29 @@ function generateLoginRedirect(request: CloudFrontRequest): CloudFrontRequestRes
  */
 export async function handler(event: CloudFrontRequestEvent): Promise<CloudFrontRequestResult> {
   const request = event.Records[0].cf.request;
-  const uri = request.uri;
+  const originalUri = request.uri;
 
-  // Skip authentication for static assets
-  if (isStaticAsset(uri)) {
+  // Skip authentication for login page BEFORE URL rewriting
+  // This ensures /login is accessible without auth
+  if (originalUri === CONFIG.LOGIN_PATH || originalUri.startsWith(CONFIG.LOGIN_PATH + '?')) {
+    // Rewrite to .html and return
+    request.uri = rewriteCleanUrl(originalUri);
     return request;
   }
 
   // Skip authentication for callback path
-  if (uri === CONFIG.CALLBACK_PATH || uri.startsWith(CONFIG.CALLBACK_PATH + '?')) {
+  if (originalUri === CONFIG.CALLBACK_PATH || originalUri.startsWith(CONFIG.CALLBACK_PATH + '?')) {
+    return request;
+  }
+
+  // Rewrite clean URLs to .html (e.g., /join -> /join.html)
+  let uri = rewriteCleanUrl(originalUri);
+  if (uri !== originalUri) {
+    request.uri = uri;
+  }
+
+  // Skip authentication for static assets
+  if (isStaticAsset(uri)) {
     return request;
   }
 
