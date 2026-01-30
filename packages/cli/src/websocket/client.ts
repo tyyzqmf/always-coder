@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import WebSocket, { type RawData } from 'ws';
 import {
   MessageType,
   isEncryptedEnvelope,
@@ -101,9 +102,9 @@ export class WebSocketClient extends EventEmitter {
           reject(error);
         };
 
-        this.ws.onmessage = (event) => {
-          this.handleMessage(event.data);
-        };
+        this.ws.on('message', (data: RawData) => {
+          this.handleMessage(data);
+        });
       } catch (error) {
         reject(error);
       }
@@ -113,7 +114,7 @@ export class WebSocketClient extends EventEmitter {
   /**
    * Handle incoming messages
    */
-  private handleMessage(data: string | Buffer): void {
+  private handleMessage(data: RawData): void {
     try {
       const message = JSON.parse(data.toString());
       this.emit('message', message);
