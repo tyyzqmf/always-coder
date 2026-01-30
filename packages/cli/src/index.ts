@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import chalk from 'chalk';
+import * as fs from 'fs';
 import { SessionManager } from './session/manager.js';
 import { loadConfig, saveConfig, getConfigValue, setConfigValue } from './config/index.js';
 import {
@@ -9,7 +10,15 @@ import {
   stopDaemonSession,
   cleanupStaleSessions,
   isProcessRunning,
+  waitForSession,
 } from './daemon/index.js';
+
+// In daemon mode, ignore SIGHUP early to prevent termination
+if (process.env.ALWAYS_CODER_DAEMON === 'true') {
+  process.on('SIGHUP', () => {
+    // Ignore SIGHUP in daemon mode
+  });
+}
 
 const program = new Command();
 
@@ -25,8 +34,16 @@ program
   .option('-s, --server <url>', 'WebSocket server URL')
   .option('-d, --daemon', 'Run in background (daemon mode)')
   .option('--daemon-child', 'Internal flag for daemon child process')
+  .allowUnknownOption()  // Pass unknown options through to the child command
   .action(async (command: string | undefined, args: string[], options: { server?: string; daemon?: boolean; daemonChild?: boolean }) => {
-    const cmd = command || 'claude';
+    // Handle command that contains spaces (e.g., "sleep 300")
+    let cmd = command || 'claude';
+    let cmdArgs = args;
+    if (cmd.includes(' ')) {
+      const parts = cmd.split(/\s+/);
+      cmd = parts[0];
+      cmdArgs = [...parts.slice(1), ...args];
+    }
 
     // Check if this is a daemon child process
     const isDaemonChild = options.daemonChild || process.env.ALWAYS_CODER_DAEMON === 'true';
@@ -39,14 +56,33 @@ program
       console.log(chalk.cyan('╚═══════════════════════════════════════════════════════════╝'));
 
       try {
-        const result = startDaemon(cmd, args, options.server);
+        const result = startDaemon(cmd, cmdArgs, options.server);
         console.log(chalk.green('✓ Daemon started'));
         console.log(chalk.gray(`   PID: ${result.pid}`));
         console.log(chalk.gray(`   Log: ${result.logFile}`));
         console.log('');
-        console.log(chalk.yellow('Session is starting in background...'));
-        console.log(chalk.gray('Run "always sessions" to see active sessions and web URLs.'));
-        console.log(chalk.gray('Run "always stop <session-id>" to stop a session.'));
+        console.log(chalk.yellow('Waiting for session to initialize...'));
+
+        // Wait for session info to be created
+        const session = await waitForSession(result.pid, 15000);
+
+        if (session) {
+          console.log('');
+          console.log(chalk.green(`✓ Session ready: ${chalk.bold(session.sessionId)}`));
+          console.log('');
+          console.log(chalk.cyan('Web URL:'));
+          console.log(chalk.white(`   ${session.webUrl}`));
+          console.log('');
+          console.log(chalk.gray('Commands:'));
+          console.log(chalk.gray(`   always sessions              - List active sessions`));
+          console.log(chalk.gray(`   always stop ${session.sessionId}          - Stop this session`));
+          console.log(chalk.gray(`   always logs ${session.sessionId}          - View session logs`));
+        } else {
+          console.log('');
+          console.log(chalk.yellow('Session is still starting...'));
+          console.log(chalk.gray('Run "always sessions" to see the web URL when ready.'));
+        }
+
         process.exit(0);
       } catch (error) {
         console.error(chalk.red('Failed to start daemon:'), error);
@@ -61,9 +97,34 @@ program
       console.log(chalk.cyan('╚═══════════════════════════════════════════════════════════╝'));
     }
 
+    // Add global error handlers for daemon mode
+    if (isDaemonChild) {
+      process.on('uncaughtException', (error) => {
+        if (logFile) {
+          fs.appendFileSync(logFile, `[${new Date().toISOString()}] UNCAUGHT EXCEPTION: ${error.stack || error}\n`);
+          fs.appendFileSync(logFile, `[${new Date().toISOString()}] Exiting due to uncaught exception\n`);
+        }
+        console.error('UNCAUGHT:', error);
+        process.exit(1);
+      });
+
+      process.on('unhandledRejection', (reason) => {
+        if (logFile) {
+          const stack = reason instanceof Error ? reason.stack : String(reason);
+          fs.appendFileSync(logFile, `[${new Date().toISOString()}] UNHANDLED REJECTION: ${stack}\n`);
+        }
+      });
+
+      process.on('exit', (code) => {
+        if (logFile) {
+          fs.appendFileSync(logFile, `[${new Date().toISOString()}] PROCESS EXIT with code: ${code}\n`);
+        }
+      });
+    }
+
     const session = new SessionManager({
       command: cmd,
-      args: args.length > 0 ? args : undefined,
+      args: cmdArgs.length > 0 ? cmdArgs : undefined,
       serverUrl: options.server,
       daemon: isDaemonChild,
       logFile: logFile,
@@ -81,7 +142,19 @@ program
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 
+    // In daemon mode, ignore SIGHUP to prevent termination when terminal closes
+    if (isDaemonChild) {
+      process.on('SIGHUP', () => {
+        if (logFile) {
+          fs.appendFileSync(logFile, `[${new Date().toISOString()}] Received SIGHUP, ignoring...\n`);
+        }
+      });
+    }
+
     session.on('terminal:exit', (exitCode: number) => {
+      if (isDaemonChild && logFile) {
+        fs.appendFileSync(logFile, `[${new Date().toISOString()}] terminal:exit event received with code: ${exitCode}\n`);
+      }
       process.exit(exitCode);
     });
 

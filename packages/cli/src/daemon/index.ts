@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, openSync } from 'fs';
 import { join } from 'path';
 import { getConfigDir } from '../config/index.js';
 
@@ -150,6 +150,36 @@ export function stopDaemonSession(sessionId: string): boolean {
 }
 
 /**
+ * Wait for a new session to be created by the daemon process
+ */
+export async function waitForSession(
+  pid: number,
+  timeoutMs: number = 10000
+): Promise<DaemonSession | null> {
+  const startTime = Date.now();
+  const checkInterval = 200; // Check every 200ms
+
+  while (Date.now() - startTime < timeoutMs) {
+    // Check if process is still running
+    if (!isProcessRunning(pid)) {
+      return null;
+    }
+
+    // Look for a session file with this PID
+    const sessions = listDaemonSessions();
+    const session = sessions.find((s) => s.pid === pid);
+    if (session) {
+      return session;
+    }
+
+    // Wait before checking again
+    await new Promise((resolve) => setTimeout(resolve, checkInterval));
+  }
+
+  return null;
+}
+
+/**
  * Start a daemon process
  */
 export function startDaemon(
@@ -183,10 +213,16 @@ export function startDaemon(
     ALWAYS_CODER_LOG_FILE: logFile,
   };
 
-  // Spawn detached process
-  const child = spawn(process.execPath, daemonArgs, {
+  // Open log file for stdout/stderr
+  const stdoutLog = join(logsDir, `session-${timestamp}-stdout.log`);
+  const out = openSync(stdoutLog, 'a');
+  const err = openSync(stdoutLog, 'a');
+
+  // Use setsid to create a new session, which prevents SIGHUP from being sent
+  // to the PTY child processes when the parent terminal closes
+  const child = spawn('setsid', ['-f', process.execPath, ...daemonArgs], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', out, err],
     env,
   });
 

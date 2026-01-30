@@ -42,18 +42,38 @@ export class Terminal extends EventEmitter {
    * Start the PTY process
    */
   start(): void {
-    const shell = this.options.command;
-    const args = this.options.args || [];
+    let shell = this.options.command;
+    let args = this.options.args || [];
     const cwd = this.options.cwd || process.cwd();
+
+    // For bash/zsh, force interactive mode to prevent SIGHUP exit
+    if ((shell === 'bash' || shell === 'zsh') && !args.includes('-i')) {
+      args = ['-i', ...args];
+    }
+
+    // In daemon mode, wrap command in bash with trap to ignore SIGHUP
+    const isDaemon = process.env.ALWAYS_CODER_DAEMON === 'true';
+    if (isDaemon) {
+      // Create a command that ignores SIGHUP and runs the original command
+      // Need to properly escape the command and args for bash -c
+      const escapedArgs = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
+      const originalCmd = shell + (args.length > 0 ? ' ' + escapedArgs : '');
+      shell = 'bash';
+      // Use single string for -c argument with trap and exec
+      args = ['-c', `trap '' HUP; exec ${originalCmd}`];
+    }
     const env = {
       ...process.env,
       ...this.options.env,
       TERM: 'xterm-256color',
+      // Prevent bash from exiting on SIGHUP in daemon mode
+      IGNOREEOF: '10',
     } as Record<string, string>;
 
     console.log(`Starting PTY: ${shell} ${args.join(' ')}`);
     console.log(`  CWD: ${cwd}`);
     console.log(`  Size: ${this.cols}x${this.rows}`);
+    console.log(`  ENV TERM: ${env.TERM}`);
 
     try {
       this.ptyProcess = pty.spawn(shell, args, {
@@ -70,6 +90,7 @@ export class Terminal extends EventEmitter {
       });
 
       this.ptyProcess.onExit(({ exitCode, signal }) => {
+        console.log(`PTY onExit: code=${exitCode}, signal=${signal}`);
         this.emit('exit', exitCode, signal);
         this.ptyProcess = null;
       });
