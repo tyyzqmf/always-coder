@@ -37,7 +37,7 @@ if [ "$NODE_VERSION" -lt 20 ]; then
 fi
 
 # Clone or update
-INSTALL_DIR="$HOME/always-coder"
+INSTALL_DIR="$HOME/.always-coder"
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation..."
   cd "$INSTALL_DIR"
@@ -60,14 +60,26 @@ pnpm --filter @always-coder/cli build --silent
 echo "Configuring..."
 node packages/cli/dist/index.js init "$SERVER_URL" "$WEB_URL"
 
-# Add alias suggestion
+# Create global command
+echo "Creating global command..."
+mkdir -p "$HOME/.local/bin"
+
+cat > "$HOME/.local/bin/always" << 'EOF'
+#!/bin/bash
+cd "$HOME/.always-coder" && node packages/cli/dist/index.js "$@"
+EOF
+
+chmod +x "$HOME/.local/bin/always"
+
+# Add to PATH if needed
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
 echo ""
 echo -e "${GREEN}✓ Installation complete!${NC}"
 echo ""
-echo "Run with:"
-echo -e "  ${CYAN}cd ~/always-coder && pnpm always claude${NC}"
+echo -e "Run: ${CYAN}always claude${NC}"
 echo ""
-echo "Or add alias to ~/.bashrc:"
-echo -e "  ${CYAN}echo 'alias always=\"cd ~/always-coder && pnpm always\"' >> ~/.bashrc${NC}"
-echo -e "  ${CYAN}source ~/.bashrc${NC}"
-echo -e "  ${CYAN}always claude${NC}"
+echo -e "(If 'always' not found, run: ${CYAN}source ~/.bashrc${NC})"
