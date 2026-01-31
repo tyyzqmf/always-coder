@@ -1,7 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
 
 // Mock fs module
 vi.mock('fs', () => ({
@@ -15,6 +12,9 @@ vi.mock('fs', () => ({
 vi.mock('os', () => ({
   homedir: vi.fn(() => '/mock/home'),
 }));
+
+// Import mocked functions for assertions
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 
 // Store original env
 const originalEnv = process.env;
