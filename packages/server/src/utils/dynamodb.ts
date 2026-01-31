@@ -196,6 +196,33 @@ export async function deleteSession(sessionId: string): Promise<void> {
   await docClient.send(new DeleteCommand(input));
 }
 
+/**
+ * Get all sessions for a user
+ * Requires a GSI on userId
+ */
+export async function getSessionsByUser(
+  userId: string,
+  includeInactive: boolean = false
+): Promise<Session[]> {
+  const input: QueryCommandInput = {
+    TableName: SESSIONS_TABLE,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :uid',
+    ExpressionAttributeValues: { ':uid': userId },
+    ScanIndexForward: false, // Most recent first
+  };
+
+  // Filter out closed sessions unless includeInactive is true
+  if (!includeInactive) {
+    input.FilterExpression = '#status <> :closed';
+    input.ExpressionAttributeNames = { '#status': 'status' };
+    input.ExpressionAttributeValues![':closed'] = 'closed';
+  }
+
+  const result = await docClient.send(new QueryCommand(input));
+  return (result.Items as Session[]) || [];
+}
+
 // ==================== Message Cache Operations ====================
 
 export async function cacheMessage(message: Omit<CachedMessage, 'ttl'>): Promise<void> {

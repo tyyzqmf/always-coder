@@ -14,6 +14,10 @@ export interface DaemonSession {
   startedAt: number;
   webUrl: string;
   logFile: string;
+  // Instance identification
+  instanceId?: string;
+  hostname?: string;
+  instanceLabel?: string;
 }
 
 /**

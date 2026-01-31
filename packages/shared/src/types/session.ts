@@ -25,6 +25,13 @@ export interface Session {
   lastActiveAt: number;
   ttl: number;
   userId?: string; // Optional, for authenticated sessions
+  // Instance identification (set by CLI)
+  instanceId?: string;
+  instanceLabel?: string;
+  hostname?: string;
+  command?: string;
+  commandArgs?: string[];
+  webUrl?: string;
 }
 
 /**

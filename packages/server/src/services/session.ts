@@ -1,4 +1,4 @@
-import { SessionStatus, type Session } from '@always-coder/shared';
+import { SessionStatus, type Session, type RemoteSessionInfo } from '@always-coder/shared';
 import {
   createSession as dbCreateSession,
   getSession as dbGetSession,
@@ -6,6 +6,7 @@ import {
   addWebConnection as dbAddWebConnection,
   removeWebConnection as dbRemoveWebConnection,
   deleteSession as dbDeleteSession,
+  getSessionsByUser as dbGetSessionsByUser,
 } from '../utils/dynamodb.js';
 
 /**
@@ -128,4 +129,44 @@ export async function isSessionActive(sessionId: string): Promise<boolean> {
     session.status === SessionStatus.ACTIVE ||
     session.status === SessionStatus.PAUSED
   );
+}
+
+/**
+ * Get all sessions for a user (for remote session listing)
+ */
+export async function getUserSessions(
+  userId: string,
+  includeInactive: boolean = false
+): Promise<RemoteSessionInfo[]> {
+  const sessions = await dbGetSessionsByUser(userId, includeInactive);
+
+  return sessions.map((session) => ({
+    sessionId: session.sessionId,
+    status: session.status,
+    createdAt: session.createdAt,
+    lastActiveAt: session.lastActiveAt,
+    instanceId: session.instanceId,
+    instanceLabel: session.instanceLabel,
+    hostname: session.hostname,
+    command: session.command,
+    commandArgs: session.commandArgs,
+    webUrl: session.webUrl,
+  }));
+}
+
+/**
+ * Update session metadata (instance info, command, webUrl)
+ */
+export async function updateSessionMetadata(
+  sessionId: string,
+  metadata: {
+    instanceId?: string;
+    instanceLabel?: string;
+    hostname?: string;
+    command?: string;
+    commandArgs?: string[];
+    webUrl?: string;
+  }
+): Promise<Session | null> {
+  return dbUpdateSession(sessionId, metadata);
 }

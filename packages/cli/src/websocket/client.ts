@@ -178,6 +178,23 @@ export class WebSocketClient extends EventEmitter {
   }
 
   /**
+   * Send session update (CLI updating session metadata)
+   */
+  sendSessionUpdate(update: {
+    instanceId?: string;
+    instanceLabel?: string;
+    hostname?: string;
+    command?: string;
+    commandArgs?: string[];
+    webUrl?: string;
+  }): void {
+    this.send({
+      type: MessageType.SESSION_UPDATE,
+      ...update,
+    });
+  }
+
+  /**
    * Send ping
    */
   private sendPing(): void {

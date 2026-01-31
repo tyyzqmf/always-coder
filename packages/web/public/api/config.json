@@ -1,0 +1,9 @@
+{
+  "server": "wss://zys3xfqv9l.execute-api.us-east-1.amazonaws.com/prod",
+  "webUrl": "https://d3eiysbs2sqijx.cloudfront.net",
+  "cognito": {
+    "userPoolId": "us-east-1_Knod5dPWc",
+    "clientId": "6a77qd057m2jon05shjn1mvlbu",
+    "region": "us-east-1"
+  }
+}
