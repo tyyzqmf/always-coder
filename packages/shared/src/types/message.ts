@@ -12,6 +12,13 @@ export enum MessageType {
   SESSION_JOINED = 'session:joined',
   SESSION_ERROR = 'session:error',
 
+  // Session list (for remote session management)
+  SESSION_LIST_REQUEST = 'session:list:request',
+  SESSION_LIST_RESPONSE = 'session:list:response',
+  SESSION_INFO_REQUEST = 'session:info:request',
+  SESSION_INFO_RESPONSE = 'session:info:response',
+  SESSION_UPDATE = 'session:update',
+
   // Connection events
   WEB_CONNECTED = 'web:connected',
   WEB_DISCONNECTED = 'web:disconnected',
@@ -142,4 +149,60 @@ export interface QRCodeData {
   sessionId: string;
   publicKey: string;
   wsEndpoint: string;
+}
+
+/**
+ * Session list request payload
+ */
+export interface SessionListRequestPayload {
+  includeInactive?: boolean;
+}
+
+/**
+ * Remote session info (returned in session list)
+ */
+export interface RemoteSessionInfo {
+  sessionId: string;
+  status: string;
+  createdAt: number;
+  lastActiveAt: number;
+  instanceId?: string;
+  instanceLabel?: string;
+  hostname?: string;
+  command?: string;
+  commandArgs?: string[];
+  webUrl?: string;
+}
+
+/**
+ * Session list response payload
+ */
+export interface SessionListResponsePayload {
+  sessions: RemoteSessionInfo[];
+}
+
+/**
+ * Session info request payload
+ */
+export interface SessionInfoRequestPayload {
+  sessionId: string;
+}
+
+/**
+ * Session info response payload
+ */
+export interface SessionInfoResponsePayload {
+  session: RemoteSessionInfo | null;
+}
+
+/**
+ * Session update payload (CLI updates session metadata)
+ */
+export interface SessionUpdatePayload {
+  instanceId?: string;
+  instanceLabel?: string;
+  hostname?: string;
+  command?: string;
+  commandArgs?: string[];
+  webUrl?: string;
 }

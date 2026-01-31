@@ -1,6 +1,6 @@
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 /**
@@ -11,6 +11,25 @@ export interface Config {
   webUrl: string;
   userId?: string;
   authToken?: string;
+  refreshToken?: string;
+  instanceLabel?: string;
+  // Cognito configuration (fetched from server)
+  cognitoUserPoolId?: string;
+  cognitoClientId?: string;
+  cognitoRegion?: string;
+}
+
+/**
+ * Server configuration returned by the server's /api/config endpoint
+ */
+export interface ServerConfig {
+  server: string;
+  webUrl: string;
+  cognito: {
+    userPoolId: string;
+    clientId: string;
+    region: string;
+  };
 }
 
 /**
@@ -57,39 +76,42 @@ export function getConfigPath(): string {
 
 /**
  * Load configuration from file
- * Priority: 1. Local config (config.local.json) 2. User config (~/.always-coder/config.json)
+ * Merges local config (server/webUrl) with user config (auth tokens)
+ * User config auth tokens take precedence
  */
 export function loadConfig(): Config {
-  // Try local config first (for development)
+  let config = { ...DEFAULT_CONFIG };
+
+  // Try local config first (for development - server/webUrl)
   const localConfigPath = getLocalConfigPath();
   if (existsSync(localConfigPath)) {
     try {
       const content = readFileSync(localConfigPath, 'utf-8');
-      const config = JSON.parse(content);
-      return { ...DEFAULT_CONFIG, ...config };
+      const localConfig = JSON.parse(content);
+      config = { ...config, ...localConfig };
     } catch (error) {
       console.warn('Failed to load local config:', error);
     }
   }
 
-  // Fall back to user config
+  // Merge user config (auth tokens override local config)
   const configPath = getConfigPath();
-  if (!existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG };
+  if (existsSync(configPath)) {
+    try {
+      const content = readFileSync(configPath, 'utf-8');
+      const userConfig = JSON.parse(content);
+      config = { ...config, ...userConfig };
+    } catch (error) {
+      console.warn('Failed to load user config:', error);
+    }
   }
 
-  try {
-    const content = readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(content);
-    return { ...DEFAULT_CONFIG, ...config };
-  } catch (error) {
-    console.warn('Failed to load config:', error);
-    return { ...DEFAULT_CONFIG };
-  }
+  return config;
 }
 
 /**
  * Save configuration to file
+ * Sets file permissions to 0600 (owner read/write only) for security
  */
 export function saveConfig(config: Partial<Config>): void {
   const configPath = getConfigPath();
@@ -97,6 +119,14 @@ export function saveConfig(config: Partial<Config>): void {
   const merged = { ...existing, ...config };
 
   writeFileSync(configPath, JSON.stringify(merged, null, 2));
+
+  // Security: Set file permissions to 0600 (owner read/write only)
+  // This protects auth tokens from being read by other users
+  try {
+    chmodSync(configPath, 0o600);
+  } catch {
+    // Ignore permission errors on Windows
+  }
 }
 
 /**
@@ -146,10 +176,111 @@ export function getWebUrl(): string {
   const webUrl = loadConfig().webUrl;
   if (!webUrl) {
     throw new Error(
-      'Web URL not configured. Please set it via:\n' +
-        '  - Environment variable: ALWAYS_CODER_WEB_URL=https://your-web-url\n' +
-        '  - Or run: always-coder config set webUrl <your-web-url>'
+      'Web URL not configured. Please run: always login'
     );
   }
   return webUrl;
+}
+
+/**
+ * Validate and normalize a URL
+ * @throws Error if URL is invalid
+ */
+export function validateAndNormalizeUrl(url: string): string {
+  const trimmed = url.trim();
+
+  if (!trimmed) {
+    throw new Error('URL cannot be empty');
+  }
+
+  // Add https if no protocol specified
+  let normalized = trimmed;
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = `https://${normalized}`;
+  }
+
+  // Remove trailing slash
+  normalized = normalized.replace(/\/+$/, '');
+
+  // Validate URL format
+  try {
+    const parsed = new URL(normalized);
+    // Only allow http/https protocols
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Only HTTP/HTTPS URLs are allowed');
+    }
+    // Prevent localhost in production (optional security measure)
+    // if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+    //   console.warn('Warning: Using localhost URL');
+    // }
+    return normalized;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Invalid URL format: ${trimmed}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch server configuration from a given URL
+ * The server should expose /api/config.json with ServerConfig
+ *
+ * @param serverUrl - The base URL of the server (e.g., https://app.example.com)
+ * @returns ServerConfig with all necessary configuration
+ */
+export async function fetchServerConfig(serverUrl: string): Promise<ServerConfig> {
+  // Validate and normalize the URL
+  const baseUrl = validateAndNormalizeUrl(serverUrl);
+
+  const configUrl = `${baseUrl}/api/config.json`;
+
+  try {
+    const response = await fetch(configUrl, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const config = (await response.json()) as ServerConfig;
+
+    // Validate required fields
+    if (!config.server || !config.webUrl || !config.cognito) {
+      throw new Error('Invalid server configuration: missing required fields');
+    }
+
+    return config;
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(`Failed to connect to ${configUrl}. Please check the URL and try again.`);
+    }
+    throw new Error(
+      `Failed to fetch server configuration from ${configUrl}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Save server configuration to local config
+ */
+export function saveServerConfig(serverConfig: ServerConfig): void {
+  saveConfig({
+    server: serverConfig.server,
+    webUrl: serverConfig.webUrl,
+    cognitoUserPoolId: serverConfig.cognito.userPoolId,
+    cognitoClientId: serverConfig.cognito.clientId,
+    cognitoRegion: serverConfig.cognito.region,
+  });
+}
+
+/**
+ * Check if server is configured
+ */
+export function isServerConfigured(): boolean {
+  const config = loadConfig();
+  return !!(config.server && config.webUrl && config.cognitoUserPoolId && config.cognitoClientId);
 }

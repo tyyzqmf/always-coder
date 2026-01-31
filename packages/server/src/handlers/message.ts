@@ -4,6 +4,9 @@ import {
   isSessionCreateRequest,
   isSessionReconnectRequest,
   isSessionJoinRequest,
+  isSessionListRequest,
+  isSessionInfoRequest,
+  isSessionUpdateRequest,
   isEncryptedEnvelope,
   ErrorCodes,
 } from '@always-coder/shared';
@@ -14,6 +17,8 @@ import {
   joinSession,
   isSessionActive,
   reconnectSession,
+  getUserSessions,
+  updateSessionMetadata,
 } from '../services/session.js';
 import {
   initializeApiClient,
@@ -91,6 +96,21 @@ export const handler: APIGatewayProxyHandler = async (event): Promise<APIGateway
     // Handle state request (new web connection wants history)
     if ((body as Record<string, unknown>).type === MessageType.STATE_REQUEST) {
       return await handleStateRequest(connectionId, body as { sessionId: string; sinceSeq?: number });
+    }
+
+    // Handle session list request (get all user sessions)
+    if (isSessionListRequest(body)) {
+      return await handleSessionListRequest(connectionId, body.includeInactive || false, userId);
+    }
+
+    // Handle session info request (get specific session info)
+    if (isSessionInfoRequest(body)) {
+      return await handleSessionInfoRequest(connectionId, body.sessionId, userId);
+    }
+
+    // Handle session update (CLI updating session metadata)
+    if (isSessionUpdateRequest(body)) {
+      return await handleSessionUpdate(connectionId, body, userId);
     }
 
     console.warn('Unknown message type:', (body as Record<string, unknown>).type);
@@ -233,6 +253,15 @@ async function handleEncryptedMessage(
     return sendError(connectionId, ErrorCodes.CONNECTION_FAILED, 'Connection not found');
   }
 
+  // Security: Validate envelope sessionId matches connection's session
+  if (envelope.sessionId !== connection.sessionId) {
+    console.warn('Session ID mismatch:', {
+      envelope: envelope.sessionId,
+      connection: connection.sessionId,
+    });
+    return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Session ID mismatch');
+  }
+
   // Get session
   const session = await getSession(connection.sessionId);
   if (!session) {
@@ -294,6 +323,127 @@ async function handleStateRequest(
   }
 
   return { statusCode: 200, body: 'OK' };
+}
+
+/**
+ * Handle SESSION_LIST_REQUEST - get all sessions for a user
+ */
+async function handleSessionListRequest(
+  connectionId: string,
+  includeInactive: boolean,
+  userId: string
+): Promise<APIGatewayProxyResult> {
+  console.log('Session list request:', { connectionId, userId, includeInactive });
+
+  // Require authentication for session listing
+  if (userId === 'anonymous') {
+    return sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+  }
+
+  try {
+    const sessions = await getUserSessions(userId, includeInactive);
+
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_LIST_RESPONSE,
+      sessions,
+    });
+
+    return { statusCode: 200, body: 'OK' };
+  } catch (error) {
+    console.error('Failed to get user sessions:', error);
+    return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Failed to get sessions');
+  }
+}
+
+/**
+ * Handle SESSION_INFO_REQUEST - get specific session info
+ */
+async function handleSessionInfoRequest(
+  connectionId: string,
+  sessionId: string,
+  userId: string
+): Promise<APIGatewayProxyResult> {
+  console.log('Session info request:', { connectionId, sessionId, userId });
+
+  // Require authentication for session info
+  if (userId === 'anonymous') {
+    return sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+  }
+
+  try {
+    const session = await getSession(sessionId);
+
+    // Only return session if it belongs to the user
+    if (!session || session.userId !== userId) {
+      await sendToConnection(connectionId, {
+        type: MessageType.SESSION_INFO_RESPONSE,
+        session: null,
+      });
+      return { statusCode: 200, body: 'OK' };
+    }
+
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_INFO_RESPONSE,
+      session: {
+        sessionId: session.sessionId,
+        status: session.status,
+        createdAt: session.createdAt,
+        lastActiveAt: session.lastActiveAt,
+        instanceId: session.instanceId,
+        instanceLabel: session.instanceLabel,
+        hostname: session.hostname,
+        command: session.command,
+        commandArgs: session.commandArgs,
+        webUrl: session.webUrl,
+      },
+    });
+
+    return { statusCode: 200, body: 'OK' };
+  } catch (error) {
+    console.error('Failed to get session info:', error);
+    return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Failed to get session info');
+  }
+}
+
+/**
+ * Handle SESSION_UPDATE - CLI updating session metadata
+ */
+async function handleSessionUpdate(
+  connectionId: string,
+  update: {
+    type?: string; // Excluded from update
+    instanceId?: string;
+    instanceLabel?: string;
+    hostname?: string;
+    command?: string;
+    commandArgs?: string[];
+    webUrl?: string;
+  },
+  userId: string
+): Promise<APIGatewayProxyResult> {
+  console.log('Session update:', { connectionId, userId, update });
+
+  // Find the session for this connection
+  const connection = await findConnection(connectionId);
+  if (!connection) {
+    return sendError(connectionId, ErrorCodes.CONNECTION_FAILED, 'Connection not found');
+  }
+
+  // Only CLI connections can update session metadata
+  if (connection.role !== 'cli') {
+    return sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Only CLI can update session');
+  }
+
+  // Extract only the metadata fields (exclude message type)
+  const { type: _, ...metadata } = update;
+
+  try {
+    await updateSessionMetadata(connection.sessionId, metadata);
+    return { statusCode: 200, body: 'OK' };
+  } catch (error) {
+    console.error('Failed to update session:', error);
+    return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Failed to update session');
+  }
 }
 
 /**

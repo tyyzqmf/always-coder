@@ -87,6 +87,47 @@ export function isSessionJoinRequest(
 }
 
 /**
+ * Type guard for session list request
+ */
+export function isSessionListRequest(
+  data: unknown
+): data is { type: MessageType.SESSION_LIST_REQUEST; includeInactive?: boolean } {
+  if (typeof data !== 'object' || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return msg.type === MessageType.SESSION_LIST_REQUEST;
+}
+
+/**
+ * Type guard for session info request
+ */
+export function isSessionInfoRequest(
+  data: unknown
+): data is { type: MessageType.SESSION_INFO_REQUEST; sessionId: string } {
+  if (typeof data !== 'object' || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return msg.type === MessageType.SESSION_INFO_REQUEST && typeof msg.sessionId === 'string';
+}
+
+/**
+ * Type guard for session update request
+ */
+export function isSessionUpdateRequest(
+  data: unknown
+): data is {
+  type: MessageType.SESSION_UPDATE;
+  instanceId?: string;
+  instanceLabel?: string;
+  hostname?: string;
+  command?: string;
+  commandArgs?: string[];
+  webUrl?: string;
+} {
+  if (typeof data !== 'object' || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return msg.type === MessageType.SESSION_UPDATE;
+}
+
+/**
  * Error codes
  */
 export const ErrorCodes = {

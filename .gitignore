@@ -46,3 +46,4 @@ tmp/
 
 # Always Coder local config
 packages/cli/config.local.json
+.ash/

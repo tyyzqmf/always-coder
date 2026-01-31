@@ -67,13 +67,20 @@ function HomeContent() {
 
         <div className="space-y-4">
           <Link
+            href="/sessions"
+            className="block w-full py-4 px-6 bg-terminal-green hover:bg-terminal-green/80 text-white rounded-lg font-medium transition-colors"
+          >
+            View My Sessions
+          </Link>
+
+          <div className="text-terminal-fg/50 text-sm">or connect to a new session</div>
+
+          <Link
             href="/scan"
             className="block w-full py-4 px-6 bg-terminal-blue hover:bg-terminal-blue/80 text-white rounded-lg font-medium transition-colors"
           >
             Scan QR Code to Connect
           </Link>
-
-          <div className="text-terminal-fg/50 text-sm">or</div>
 
           <Link
             href="/join"

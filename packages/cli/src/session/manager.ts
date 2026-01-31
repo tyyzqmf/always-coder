@@ -7,6 +7,7 @@ import { Terminal, type TerminalOptions } from '../pty/terminal.js';
 import { displayQRCode } from '../qrcode/generator.js';
 import { getWSEndpoint, getWebUrl, loadConfig } from '../config/index.js';
 import { saveDaemonSession, deleteDaemonSession, type DaemonSession } from '../daemon/index.js';
+import { getInstanceInfo, type InstanceInfo } from '../utils/instance.js';
 import chalk from 'chalk';
 
 /**
@@ -46,6 +47,10 @@ export class SessionManager extends EventEmitter {
   private maxBufferSize: number = 100 * 1024; // 100KB buffer for late joiners
   private isDaemon: boolean = false;
   private logStream: WriteStream | null = null;
+  private pendingSessionMetadata: {
+    instanceInfo: InstanceInfo;
+    sessionWebUrl: string;
+  } | null = null;
 
   constructor(options: SessionManagerOptions) {
     super();
@@ -115,20 +120,33 @@ export class SessionManager extends EventEmitter {
       // Note: session create is now sent in the 'open' handler after initial connect
       // This allows proper handling of reconnections
 
+      // Get instance info and build web URL
+      const webUrl = getWebUrl();
+      const instanceInfo = await getInstanceInfo();
+      const sessionWebUrl = `${webUrl}/join?id=${this.encryption.getSessionId()}&key=${encodeURIComponent(this.encryption.getPublicKey())}`;
+
+      // Store metadata for sending after session is created on server
+      // (we need to wait for SESSION_CREATED before sending SESSION_UPDATE
+      // so the server has registered our connection)
+      this.pendingSessionMetadata = { instanceInfo, sessionWebUrl };
+
       // Save daemon session info (for first connect)
       if (this.isDaemon) {
-        const webUrl = getWebUrl();
         const daemonSession: DaemonSession = {
           sessionId: this.encryption.getSessionId(),
           pid: process.pid,
           command: this.options.command,
           args: this.options.args || [],
           startedAt: Date.now(),
-          webUrl: `${webUrl}/join?id=${this.encryption.getSessionId()}&key=${encodeURIComponent(this.encryption.getPublicKey())}`,
+          webUrl: sessionWebUrl,
           logFile: this.options.logFile || '',
+          instanceId: instanceInfo.instanceId,
+          hostname: instanceInfo.hostname,
+          instanceLabel: instanceInfo.label,
         };
         saveDaemonSession(daemonSession);
         this.log(`Session saved: ${daemonSession.sessionId}`);
+        this.log(`Instance: ${instanceInfo.label || instanceInfo.instanceId}`);
         this.log(`Web URL: ${daemonSession.webUrl}`);
       } else {
         // Display QR code for web connection (only in interactive mode)
@@ -171,10 +189,14 @@ export class SessionManager extends EventEmitter {
 
     this.wsClient.on('session:created', () => {
       this.log(chalk.green('✓ Session created on server'));
+      // Now that the connection is registered on the server, send session metadata
+      this.sendPendingSessionMetadata();
     });
 
     this.wsClient.on('session:reconnected', () => {
       this.log(chalk.green('✓ Session reconnected on server'));
+      // Re-send session metadata after reconnect
+      this.sendPendingSessionMetadata();
     });
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {
@@ -457,6 +479,27 @@ export class SessionManager extends EventEmitter {
    */
   isSessionReady(): boolean {
     return this.isReady;
+  }
+
+  /**
+   * Send pending session metadata to server
+   * Called after session is created/reconnected on server
+   */
+  private sendPendingSessionMetadata(): void {
+    if (!this.pendingSessionMetadata || !this.wsClient) return;
+
+    const { instanceInfo, sessionWebUrl } = this.pendingSessionMetadata;
+
+    this.wsClient.sendSessionUpdate({
+      instanceId: instanceInfo.instanceId,
+      instanceLabel: instanceInfo.label,
+      hostname: instanceInfo.hostname,
+      command: this.options.command,
+      commandArgs: this.options.args || [],
+      webUrl: sessionWebUrl,
+    });
+
+    this.log(chalk.gray('   Session metadata sent to server'));
   }
 
   /**
