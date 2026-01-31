@@ -1,6 +1,6 @@
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 /**
@@ -111,6 +111,7 @@ export function loadConfig(): Config {
 
 /**
  * Save configuration to file
+ * Sets file permissions to 0600 (owner read/write only) for security
  */
 export function saveConfig(config: Partial<Config>): void {
   const configPath = getConfigPath();
@@ -118,6 +119,14 @@ export function saveConfig(config: Partial<Config>): void {
   const merged = { ...existing, ...config };
 
   writeFileSync(configPath, JSON.stringify(merged, null, 2));
+
+  // Security: Set file permissions to 0600 (owner read/write only)
+  // This protects auth tokens from being read by other users
+  try {
+    chmodSync(configPath, 0o600);
+  } catch {
+    // Ignore permission errors on Windows
+  }
 }
 
 /**
@@ -174,6 +183,46 @@ export function getWebUrl(): string {
 }
 
 /**
+ * Validate and normalize a URL
+ * @throws Error if URL is invalid
+ */
+export function validateAndNormalizeUrl(url: string): string {
+  const trimmed = url.trim();
+
+  if (!trimmed) {
+    throw new Error('URL cannot be empty');
+  }
+
+  // Add https if no protocol specified
+  let normalized = trimmed;
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = `https://${normalized}`;
+  }
+
+  // Remove trailing slash
+  normalized = normalized.replace(/\/+$/, '');
+
+  // Validate URL format
+  try {
+    const parsed = new URL(normalized);
+    // Only allow http/https protocols
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Only HTTP/HTTPS URLs are allowed');
+    }
+    // Prevent localhost in production (optional security measure)
+    // if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+    //   console.warn('Warning: Using localhost URL');
+    // }
+    return normalized;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Invalid URL format: ${trimmed}`);
+    }
+    throw error;
+  }
+}
+
+/**
  * Fetch server configuration from a given URL
  * The server should expose /api/config.json with ServerConfig
  *
@@ -181,13 +230,8 @@ export function getWebUrl(): string {
  * @returns ServerConfig with all necessary configuration
  */
 export async function fetchServerConfig(serverUrl: string): Promise<ServerConfig> {
-  // Normalize the URL
-  let baseUrl = serverUrl.trim();
-  if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-    baseUrl = `https://${baseUrl}`;
-  }
-  // Remove trailing slash
-  baseUrl = baseUrl.replace(/\/+$/, '');
+  // Validate and normalize the URL
+  const baseUrl = validateAndNormalizeUrl(serverUrl);
 
   const configUrl = `${baseUrl}/api/config.json`;
 

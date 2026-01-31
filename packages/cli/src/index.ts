@@ -408,10 +408,26 @@ program
 
       rl.close();
 
+      // Validate credentials
+      if (!username || username.trim().length === 0) {
+        console.error(chalk.red('Username cannot be empty'));
+        process.exit(1);
+      }
+      if (!password || password.length === 0) {
+        console.error(chalk.red('Password cannot be empty'));
+        process.exit(1);
+      }
+      // Basic username format validation (allow email or alphanumeric)
+      const trimmedUsername = username.trim();
+      if (trimmedUsername.length > 128) {
+        console.error(chalk.red('Username is too long (max 128 characters)'));
+        process.exit(1);
+      }
+
       console.log(chalk.yellow('Authenticating...'));
 
       // At this point both username and password are guaranteed to be set
-      const result = await login(username!, password!);
+      const result = await login(trimmedUsername, password);
 
       console.log(chalk.green('✓ Login successful'));
       console.log(chalk.gray(`   User ID: ${result.userId}`));
