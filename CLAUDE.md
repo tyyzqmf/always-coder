@@ -138,6 +138,24 @@ When modifying authentication or encryption code:
 - **Use secure cookies** - HttpOnly, Secure, SameSite=Lax for auth tokens
 - **Validate JWT claims** - Check exp, iss, aud before trusting tokens
 
+## Git Workflow
+
+**IMPORTANT: Never commit directly to the `main` branch.** All changes must be submitted via Pull Request (PR).
+
+### Branch and PR Rules
+1. **Create a feature branch** for all changes: `git checkout -b feature/your-feature-name` or `fix/bug-description`
+2. **Commit to feature branch** - never to main
+3. **Push and create PR** - use `gh pr create` to submit changes
+4. **Wait for CI checks** - ensure all workflows pass before merging
+5. **Merge via PR** - use `gh pr merge` after approval
+
+### Branch Naming Convention
+- `feature/` - New features (e.g., `feature/add-session-export`)
+- `fix/` - Bug fixes (e.g., `fix/cognito-auth-flows`)
+- `docs/` - Documentation updates (e.g., `docs/update-readme`)
+- `refactor/` - Code refactoring (e.g., `refactor/simplify-encryption`)
+- `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`)
+
 ## Development Workflow
 
 After making code changes, you must redeploy and verify the changes work correctly before declaring the task complete. Do not consider a task finished until deployment succeeds and functionality is confirmed.
