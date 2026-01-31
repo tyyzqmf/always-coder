@@ -230,6 +230,12 @@ export class WebStack extends cdk.Stack {
         parameters: {
           UserPoolId: props.userPoolId,
           ClientId: props.userPoolClientId,
+          // Preserve auth flows set in ApiStack - required for CLI and Web login
+          ExplicitAuthFlows: [
+            'ALLOW_USER_SRP_AUTH',
+            'ALLOW_USER_PASSWORD_AUTH',
+            'ALLOW_REFRESH_TOKEN_AUTH',
+          ],
           CallbackURLs: [
             'http://localhost:3000/api/auth/callback/cognito',
             'http://localhost:3000/auth/callback',
@@ -252,6 +258,12 @@ export class WebStack extends cdk.Stack {
         parameters: {
           UserPoolId: props.userPoolId,
           ClientId: props.userPoolClientId,
+          // Preserve auth flows set in ApiStack - required for CLI and Web login
+          ExplicitAuthFlows: [
+            'ALLOW_USER_SRP_AUTH',
+            'ALLOW_USER_PASSWORD_AUTH',
+            'ALLOW_REFRESH_TOKEN_AUTH',
+          ],
           CallbackURLs: [
             'http://localhost:3000/api/auth/callback/cognito',
             'http://localhost:3000/auth/callback',
