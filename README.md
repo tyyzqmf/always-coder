@@ -1,218 +1,325 @@
 # Always Coder
 
-Remote AI coding agent control system - access Claude, Codex, and other AI assistants from anywhere via end-to-end encrypted WebSocket connections.
+**Remote AI Coding Agent Control System** - Secure terminal access to Claude, Codex, and other AI assistants from anywhere via end-to-end encrypted WebSocket connections.
 
 ## Features
 
-- **Remote Terminal Access** - Control AI assistants (Claude, Codex, etc.) from any device
-- **End-to-End Encryption** - All data encrypted using X25519 + XSalsa20-Poly1305 (NaCl/libsodium)
-- **Zero-Knowledge Server** - Server relays encrypted messages without decryption
-- **QR Code Pairing** - Scan to connect instantly from your phone or browser
-- **Real-time Sync** - Live terminal output with xterm.js emulation
+### Core Capabilities
+- **🔐 End-to-End Encryption** - Military-grade encryption using X25519 + XSalsa20-Poly1305 (NaCl/libsodium)
+- **📱 Multi-Device Access** - Control AI assistants from any device with a browser
+- **🔒 Zero-Knowledge Architecture** - Server cannot decrypt messages, only routes encrypted envelopes
+- **📸 QR Code Pairing** - Instant connection via QR code scanning
+- **⚡ Real-time Terminal** - Live terminal emulation with xterm.js
+- **👥 Multi-Instance Support** - Manage multiple AI sessions across different machines
+- **🔑 Cognito Authentication** - Secure user authentication with AWS Cognito (optional)
+- **💾 Session Persistence** - Reconnect to existing sessions after network interruptions
+
+### Security Features
+- **X25519 Key Exchange** - Elliptic curve Diffie-Hellman for secure key establishment
+- **XSalsa20-Poly1305** - Authenticated encryption with associated data (AEAD)
+- **Perfect Forward Secrecy** - Each session uses unique ephemeral keys
+- **User Isolation** - Sessions are isolated per user when authentication is enabled
+- **Automatic Expiry** - Sessions expire after 24 hours for security
+
+## Quick Start
+
+### For End Users
+
+If someone has already deployed the infrastructure and provided you with URLs:
+
+```bash
+# One-line installation
+curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
+
+# Reload your shell (first time only)
+source ~/.bashrc
+
+# Start Claude with remote access
+always claude
+
+# Scan the QR code with your phone or visit the web URL
+```
+
+### For Self-Deployment
+
+Deploy your own Always Coder infrastructure:
+
+```bash
+# Clone and install
+git clone https://github.com/tyyzqmf/always-coder.git
+cd always-coder
+pnpm install
+
+# Deploy to AWS
+cd infra
+pnpm cdk bootstrap  # First time only
+pnpm cdk deploy --all
+
+# Note the outputs and install CLI
+cd ..
+./install.sh <WebSocketUrl> <WebUrl>
+source ~/.bashrc
+
+# Start using
+always claude
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment guide.
+
+## CLI Commands
+
+### Starting AI Sessions
+
+```bash
+# Interactive mode (default)
+always claude                     # Start Claude
+always codex                      # Start GitHub Copilot/Codex
+always -- <command>               # Wrap any command
+
+# Background mode (daemon)
+always claude --daemon            # Run in background
+always claude -d                  # Short form
+
+# With custom server
+always claude --server wss://custom.server.com
+```
+
+### Session Management
+
+```bash
+# List all sessions
+always sessions                   # Show active sessions
+always sessions --all             # Include inactive sessions
+
+# Session control
+always stop <session-id>          # Stop specific session
+always clean                      # Stop all sessions
+always reconnect <session-id>     # Reconnect to existing session
+```
+
+### Authentication (Optional)
+
+```bash
+# Login to enable user isolation
+always login                      # Interactive login
+always login -u user@email.com   # With username
+
+# Manage authentication
+always logout                     # Clear credentials
+always whoami                     # Show current user
+```
+
+### Configuration
+
+```bash
+# View configuration
+always config list                # Show all settings
+always config get <key>           # Get specific value
+
+# Update configuration
+always config set server <url>   # Set WebSocket server
+always config set web <url>      # Set web URL
+
+# Initialize configuration
+always init <server> <web>       # Set both URLs at once
+```
 
 ## Architecture
 
 ```
-CLI (node-pty) <--> AWS (Lambda/WebSocket) <--> Web (Next.js/xterm.js)
-                          |
-                  E2E Encrypted (X25519 + XSalsa20-Poly1305)
+┌─────────────────┐     E2E Encrypted      ┌──────────────────┐      WebSocket       ┌─────────────┐
+│                 │ ◄──────────────────────► │                  │ ◄──────────────────► │             │
+│   CLI Client    │     X25519 + XSalsa20   │   AWS Lambda     │        Relay         │  Web Client │
+│   (node-pty)    │                          │  (Zero-Knowledge)│                      │  (xterm.js) │
+│                 │                          │                  │                      │             │
+└─────────────────┘                          └──────────────────┘                      └─────────────┘
+        │                                            │                                        │
+        │                                            │                                        │
+        ▼                                            ▼                                        ▼
+  ┌─────────────┐                          ┌──────────────────┐                    ┌─────────────┐
+  │   AI Agent  │                          │    DynamoDB      │                    │   Browser   │
+  │   Process   │                          │  (Sessions/Msgs) │                    │   Terminal  │
+  └─────────────┘                          └──────────────────┘                    └─────────────┘
 ```
 
-## Quick Start
+### Key Components
 
-### For End Users (Using Existing Backend)
-
-If someone has already deployed the Always Coder infrastructure and provided you with server/web URLs:
-
-```bash
-# One-liner install
-curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
-
-# Reload shell (first time only)
-source ~/.bashrc
-
-# Start a session
-always claude
-```
-
-### For Self-Deployment (Full Setup)
-
-If you want to deploy your own Always Coder infrastructure:
-
-1. **Prerequisites**
-   - Node.js 20+
-   - pnpm 8.14+
-   - AWS Account with CLI configured
-   - AWS CDK CLI (`npm install -g aws-cdk`)
-
-2. **Deploy Infrastructure**
-   ```bash
-   # Clone the repository
-   git clone https://github.com/tyyzqmf/always-coder.git
-   cd always-coder
-
-   # Install dependencies
-   pnpm install
-
-   # Deploy AWS infrastructure (first time: cdk bootstrap)
-   cd infra
-   pnpm cdk bootstrap  # Only needed once per AWS account/region
-   pnpm cdk deploy --all
-
-   # Note the outputs:
-   # - WebSocketUrl: wss://xxx.execute-api.region.amazonaws.com/prod
-   # - WebUrl: https://xxx.cloudfront.net
-   ```
-
-3. **Install CLI**
-   ```bash
-   # From repo root
-   cd ..
-   ./install.sh <WebSocketUrl> <WebUrl>
-   source ~/.bashrc
-   ```
-
-4. **Start Using**
-   ```bash
-   always claude  # Starts Claude with QR code for remote access
-   ```
-
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for detailed setup guide.
-See [infra/README.md](infra/README.md) for AWS infrastructure details.
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **CLI** | Node.js, Commander, node-pty | Terminal wrapper for AI processes |
+| **Server** | AWS Lambda, API Gateway WebSocket | Message relay (zero-knowledge) |
+| **Web** | Next.js 14, xterm.js, React | Browser-based terminal interface |
+| **Crypto** | TweetNaCl (libsodium) | E2E encryption implementation |
+| **Auth** | AWS Cognito, Lambda@Edge | User authentication (optional) |
+| **Storage** | DynamoDB, S3, CloudFront | Session state and web hosting |
 
 ## System Requirements
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Node.js | 20+ | Required for CLI and build |
-| pnpm | 8.14+ | Package manager |
-| AWS CLI | 2.x | For infrastructure deployment |
-| AWS CDK | 2.124+ | Infrastructure as Code |
+### Development & Deployment
+- **Node.js** 20+ (Required for all packages)
+- **pnpm** 8.14+ (Package manager)
+- **AWS CLI** 2.x (For deployment)
+- **AWS CDK** 2.124+ (Infrastructure as Code)
 
-## CLI Commands
-
-```bash
-# Start AI assistant sessions
-always claude                # Start Claude in interactive mode
-always claude --daemon       # Start Claude in background mode
-always codex                 # Start Codex
-always -- <any-command>      # Wrap any command
-
-# Session management
-always sessions              # List active sessions
-always stop <id>             # Stop a specific session
-always clean                 # Stop all sessions
-
-# Configuration
-always config list           # Show current configuration
-always config set server <url>  # Set server URL
-always config set web <url>     # Set web URL
-always init <server> <web>      # Initialize configuration
-```
+### End Users
+- **Node.js** 20+ (For CLI only)
+- **Modern browser** (Chrome, Firefox, Safari, Edge)
 
 ## Project Structure
 
 ```
 always-coder/
 ├── packages/
-│   ├── cli/       # CLI client (always command)
-│   ├── server/    # AWS Lambda handlers
-│   ├── web/       # Next.js web terminal
-│   └── shared/    # Shared types & crypto
-├── infra/         # AWS CDK infrastructure
-└── docs/          # Documentation
+│   ├── cli/                  # CLI client application
+│   │   ├── src/
+│   │   │   ├── auth/        # Cognito authentication
+│   │   │   ├── config/      # Configuration management
+│   │   │   ├── crypto/      # Encryption utilities
+│   │   │   ├── daemon/      # Background process management
+│   │   │   ├── pty/         # Terminal process control
+│   │   │   ├── qrcode/      # QR code generation
+│   │   │   ├── session/     # Session lifecycle
+│   │   │   └── websocket/   # WebSocket client
+│   │   └── package.json
+│   │
+│   ├── server/               # AWS Lambda handlers
+│   │   ├── src/
+│   │   │   ├── edge/        # Lambda@Edge functions
+│   │   │   ├── handlers/    # WebSocket route handlers
+│   │   │   ├── services/    # Business logic
+│   │   │   └── utils/       # DynamoDB utilities
+│   │   └── package.json
+│   │
+│   ├── web/                  # Next.js web application
+│   │   ├── src/
+│   │   │   ├── app/         # Next.js App Router
+│   │   │   ├── components/  # React components
+│   │   │   ├── hooks/       # Custom React hooks
+│   │   │   ├── lib/         # Utilities
+│   │   │   └── stores/      # Zustand state stores
+│   │   └── package.json
+│   │
+│   └── shared/               # Shared types and crypto
+│       ├── src/
+│       │   ├── crypto/      # E2E encryption core
+│       │   ├── protocol/    # Message protocol
+│       │   └── types/       # TypeScript types
+│       └── package.json
+│
+├── infra/                    # AWS CDK infrastructure
+│   ├── lib/
+│   │   ├── api-stack.ts    # WebSocket API, Lambda, DynamoDB
+│   │   └── web-stack.ts    # CloudFront, S3, Lambda@Edge
+│   └── package.json
+│
+├── docs/                     # Documentation
+│   ├── ARCHITECTURE.md      # System design
+│   ├── DEPLOYMENT.md        # Deployment guide
+│   ├── SECURITY.md          # Security details
+│   ├── API.md               # API reference
+│   └── DEVELOPMENT.md       # Development guide
+│
+└── scripts/                  # Build and deployment scripts
 ```
 
 ## Development
 
+### Setup Development Environment
+
 ```bash
+# Clone repository
+git clone https://github.com/tyyzqmf/always-coder.git
+cd always-coder
+
+# Install dependencies
+pnpm install
+
 # Run all packages in dev mode
 pnpm dev
+```
 
-# Build everything
+### Package-Specific Development
+
+```bash
+# CLI development with hot reload
+pnpm --filter @always-coder/cli dev
+
+# Web development server (http://localhost:3000)
+pnpm --filter @always-coder/web dev
+
+# Build Lambda functions
+pnpm --filter @always-coder/server build
+
+# Run tests in watch mode
+pnpm --filter @always-coder/shared test:watch
+```
+
+### Building for Production
+
+```bash
+# Build all packages
 pnpm build
 
-# Run tests
-pnpm test
-
-# Lint and typecheck
-pnpm lint
-pnpm typecheck
-
-# Build CLI only
+# Build specific package
 pnpm --filter @always-coder/cli build
 
-# Run web dev server
-pnpm --filter @always-coder/web dev
+# Run all tests
+pnpm test
+
+# Type checking
+pnpm typecheck
+
+# Linting
+pnpm lint
 ```
 
-## Troubleshooting
+## Documentation
 
-### Installation Issues
-
-**"pnpm not found"**
-```bash
-npm install -g pnpm
-```
-
-**"Node.js 20+ required"**
-```bash
-# Using nvm
-nvm install 20
-nvm use 20
-```
-
-**"always command not found" after installation**
-```bash
-source ~/.bashrc
-# Or add to PATH manually:
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-### Connection Issues
-
-**"WebSocket connection failed"**
-- Verify your server URL is correct: `always config list`
-- Check if the AWS infrastructure is deployed and running
-- Ensure your network allows WebSocket connections
-
-**"Session not found"**
-- Sessions expire after 24 hours
-- Create a new session with `always claude`
-
-### Deployment Issues
-
-**"CDK bootstrap required"**
-```bash
-cd infra
-pnpm cdk bootstrap
-```
-
-**"Insufficient permissions"**
-- Ensure your AWS credentials have permissions for:
-  - API Gateway
-  - Lambda
-  - DynamoDB
-  - CloudFront
-  - S3
-  - Cognito
-  - IAM (for creating roles)
+- **[Getting Started](docs/GETTING_STARTED.md)** - Quick setup guide
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - AWS infrastructure deployment
+- **[Security](docs/SECURITY.md)** - Encryption and authentication details
+- **[API Reference](docs/API.md)** - WebSocket protocol and messages
+- **[Development](docs/DEVELOPMENT.md)** - Contributing and development setup
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ## Security
 
-- **E2E Encryption**: All terminal data is encrypted client-to-client
-- **Zero-Knowledge**: Server cannot decrypt message contents
-- **Session Expiry**: Sessions automatically expire after 24 hours
-- **Key Exchange**: X25519 Diffie-Hellman for secure key establishment
+Always Coder implements multiple layers of security:
+
+1. **End-to-End Encryption** - All data encrypted client-to-client
+2. **Zero-Knowledge Server** - Server cannot decrypt message contents
+3. **Perfect Forward Secrecy** - Unique keys per session
+4. **User Authentication** - Optional Cognito integration
+5. **Session Isolation** - Users can only access their own sessions
+6. **Automatic Expiry** - Sessions expire after 24 hours
+
+See [docs/SECURITY.md](docs/SECURITY.md) for detailed security information.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `pnpm test`
-5. Submit a pull request
+We welcome contributions! Please see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for:
+
+- Development environment setup
+- Code style guidelines
+- Testing requirements
+- Pull request process
 
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/tyyzqmf/always-coder/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/tyyzqmf/always-coder/discussions)
+- **Security**: Report security issues to security@always-coder.dev
+
+## Acknowledgments
+
+Built with:
+- [TweetNaCl](https://tweetnacl.js.org/) - Cryptography library
+- [xterm.js](https://xtermjs.org/) - Terminal emulator
+- [AWS CDK](https://aws.amazon.com/cdk/) - Infrastructure as Code
+- [Next.js](https://nextjs.org/) - React framework
+- [node-pty](https://github.com/microsoft/node-pty) - Pseudoterminal support
