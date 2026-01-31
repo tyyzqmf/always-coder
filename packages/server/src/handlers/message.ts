@@ -253,6 +253,15 @@ async function handleEncryptedMessage(
     return sendError(connectionId, ErrorCodes.CONNECTION_FAILED, 'Connection not found');
   }
 
+  // Security: Validate envelope sessionId matches connection's session
+  if (envelope.sessionId !== connection.sessionId) {
+    console.warn('Session ID mismatch:', {
+      envelope: envelope.sessionId,
+      connection: connection.sessionId,
+    });
+    return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Session ID mismatch');
+  }
+
   // Get session
   const session = await getSession(connection.sessionId);
   if (!session) {
