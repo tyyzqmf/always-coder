@@ -1,8 +1,7 @@
 # Always Coder
 
+[![npm version](https://img.shields.io/npm/v/@always-coder/cli)](https://www.npmjs.com/package/@always-coder/cli)
 [![Node.js 20+](https://img.shields.io/badge/node-20%2B-brightgreen)](https://nodejs.org/)
-[![Bun](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh)
-[![pnpm 8+](https://img.shields.io/badge/pnpm-8%2B-orange)](https://pnpm.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude](https://img.shields.io/badge/powered%20by-claude-orange)](https://claude.ai)
 
@@ -29,16 +28,20 @@
 
 ## Quick Start
 
-### For End Users
+### Option 1: CLI Users (Recommended)
 
-If someone has already deployed the infrastructure and provided you with URLs:
+If you have access to an existing Always Coder server (someone has deployed the infrastructure):
 
+**Install via npm (easiest):**
 ```bash
-# One-line installation
-curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
+# Install globally
+npm install -g @always-coder/cli
 
-# Reload your shell (first time only)
-source ~/.bashrc
+# Configure server endpoints
+always init <server-url> <web-url>
+
+# Login (if authentication is required)
+always login
 
 # Start Claude with remote access
 always claude
@@ -46,22 +49,54 @@ always claude
 # Scan the QR code with your phone or visit the web URL
 ```
 
-### For Self-Deployment
-
-Deploy your own Always Coder infrastructure:
-
+**Or install via script:**
 ```bash
-# Clone and install
+# One-line installation with auto-configuration
+curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
+
+# Reload shell (first time only)
+source ~/.bashrc  # or source ~/.zshrc
+
+# Start using
+always claude
+```
+
+### Option 2: Self-Deployment (Full Stack)
+
+Deploy your own Always Coder infrastructure on AWS:
+
+**Prerequisites:**
+- Node.js 20+
+- pnpm 8.14+
+- AWS CLI configured with credentials
+- AWS CDK 2.124+
+
+**Deploy:**
+```bash
+# Clone and install dependencies
 git clone https://github.com/tyyzqmf/always-coder.git
 cd always-coder
 pnpm install
 
-# Deploy to AWS
+# Bootstrap CDK (first time only)
 cd infra
-pnpm cdk bootstrap  # First time only
+pnpm cdk bootstrap
+
+# Deploy all stacks (Database, API, Web)
 pnpm cdk deploy --all
 
-# Note the outputs and install CLI
+# Note the outputs:
+# - WebSocketUrl: wss://xxx.execute-api.us-east-1.amazonaws.com/prod
+# - WebUrl: https://xxx.cloudfront.net
+```
+
+**Install CLI and connect to your server:**
+```bash
+# Option A: Install from npm
+npm install -g @always-coder/cli
+always init <WebSocketUrl> <WebUrl>
+
+# Option B: Use install script
 cd ..
 ./install.sh <WebSocketUrl> <WebUrl>
 source ~/.bashrc
@@ -161,15 +196,16 @@ always init <server> <web>       # Set both URLs at once
 
 ## System Requirements
 
-### Development & Deployment
-- **Node.js** 20+ (Required for all packages)
-- **pnpm** 8.14+ (Package manager)
-- **AWS CLI** 2.x (For deployment)
-- **AWS CDK** 2.124+ (Infrastructure as Code)
+### CLI Users Only
+- **Node.js** 20+ or **Bun** 1.0+
+- **Modern browser** (Chrome, Firefox, Safari, Edge) for web access
 
-### End Users
-- **Node.js** 20+ (For CLI only)
-- **Modern browser** (Chrome, Firefox, Safari, Edge)
+### Self-Deployment
+- **Node.js** 20+
+- **pnpm** 8.14+
+- **AWS CLI** 2.x (configured with credentials)
+- **AWS CDK** 2.124+
+- **AWS Account** with permissions for Lambda, API Gateway, DynamoDB, S3, CloudFront, Cognito
 
 ## Project Structure
 
