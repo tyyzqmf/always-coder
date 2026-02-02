@@ -223,6 +223,59 @@ export function validateAndNormalizeUrl(url: string): string {
 }
 
 /**
+ * Fetch JSON from URL using https module (more reliable than native fetch on some systems)
+ */
+async function httpsGet(url: string): Promise<unknown> {
+  const https = await import('https');
+  const { URL } = await import('url');
+
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'always-coder-cli',
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            reject(new Error(`Invalid JSON response from ${url}`));
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
+/**
  * Fetch server configuration from a given URL
  * The server should expose /api/config.json with ServerConfig
  *
@@ -236,17 +289,7 @@ export async function fetchServerConfig(serverUrl: string): Promise<ServerConfig
   const configUrl = `${baseUrl}/api/config.json`;
 
   try {
-    const response = await fetch(configUrl, {
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const config = (await response.json()) as ServerConfig;
+    const config = (await httpsGet(configUrl)) as ServerConfig;
 
     // Validate required fields
     if (!config.server || !config.webUrl || !config.cognito) {
@@ -257,19 +300,13 @@ export async function fetchServerConfig(serverUrl: string): Promise<ServerConfig
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Check for common network/fetch errors
-    if (error instanceof TypeError) {
-      throw new Error(
-        `Failed to connect to ${configUrl}.\n` +
-          `  Error: ${errorMessage}\n` +
-          `  Please check:\n` +
-          `  - The URL is correct and accessible\n` +
-          `  - You have Node.js 18+ installed (run: node --version)\n` +
-          `  - Your network connection is working (try: curl ${configUrl})`
-      );
-    }
-
-    throw new Error(`Failed to fetch server configuration from ${configUrl}: ${errorMessage}`);
+    throw new Error(
+      `Failed to fetch server configuration from ${configUrl}.\n` +
+        `  Error: ${errorMessage}\n` +
+        `  Please check:\n` +
+        `  - The URL is correct and accessible\n` +
+        `  - Your network connection is working (try: curl ${configUrl})`
+    );
   }
 }
 
