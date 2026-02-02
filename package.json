@@ -16,11 +16,15 @@
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm lint && pnpm build:cli",
     "always": "node packages/cli/dist/index.js",
-    "release": "./scripts/build-release.sh"
+    "release": "./scripts/build-release.sh",
+    "security:scan": "gitleaks detect --source . --config .gitleaks.toml -v",
+    "security:scan:staged": "gitleaks protect --source . --config .gitleaks.toml --staged -v",
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "esbuild": "^0.27.2",
+    "husky": "^9.0.0",
     "prettier": "^3.2.4",
     "typescript": "^5.3.3"
   },

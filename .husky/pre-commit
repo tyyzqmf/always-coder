@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# Pre-commit hook: Run security scan on staged files
+# This prevents committing files that may contain secrets
+
+echo "🔒 Running security scan on staged files..."
+
+# Check if gitleaks is installed
+if ! command -v gitleaks &> /dev/null; then
+    echo "⚠️  gitleaks not installed. Install with: brew install gitleaks (macOS) or download from https://github.com/gitleaks/gitleaks"
+    echo "⚠️  Skipping security scan. Please install gitleaks for local secret detection."
+    exit 0
+fi
+
+# Run gitleaks on staged files
+gitleaks protect --source . --config .gitleaks.toml --staged -v
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Security scan failed! Potential secrets detected in staged files."
+    echo ""
+    echo "To fix:"
+    echo "  1. Review the findings above"
+    echo "  2. Remove or replace secret-looking values with obvious placeholders"
+    echo "  3. If it's a false positive, update .gitleaks.toml allowlist"
+    echo ""
+    echo "Placeholder format examples:"
+    echo "  - User Pool ID: us-east-1_XXXXXXXXX"
+    echo "  - Client ID: xxxxxxxxxxxxxxxxxxxxxxxxxx"
+    echo "  - API Key: your-api-key-here"
+    echo ""
+    exit 1
+fi
+
+echo "✅ Security scan passed!"
