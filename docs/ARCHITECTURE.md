@@ -22,16 +22,19 @@ The CLI client is a Node.js application that wraps AI assistant processes and ma
 **Core Modules:**
 ```
 cli/src/
-├── auth/cognito.ts       # AWS Cognito authentication
-├── config/index.ts       # Configuration management
-├── crypto/encryption.ts  # Encryption manager
+├── index.ts              # CLI entry point (Commander.js)
+├── auth/cognito.ts       # AWS Cognito SRP authentication
+├── config/index.ts       # Configuration management (~/.always-coder/)
+├── crypto/encryption.ts  # Encryption manager wrapper
 ├── daemon/index.ts       # Background process management
-├── pty/terminal.ts       # PTY process wrapper
-├── qrcode/generator.ts   # QR code display
+├── pty/terminal.ts       # PTY process wrapper (node-pty)
+├── qrcode/generator.ts   # QR code display (qrcode-terminal)
 ├── session/
-│   ├── manager.ts        # Session orchestration
+│   ├── manager.ts        # Session orchestration (EventEmitter)
 │   └── remote.ts         # Remote session discovery
-└── websocket/client.ts   # WebSocket connection
+├── utils/
+│   └── instance.ts       # Instance/hostname identification
+└── websocket/client.ts   # WebSocket connection with reconnection
 ```
 
 ### 2. Server (`packages/server`)
@@ -48,19 +51,22 @@ AWS Lambda functions handling WebSocket connections and message routing without 
 **Lambda Functions:**
 ```
 server/src/
+├── index.ts              # Entry point
 ├── handlers/
 │   ├── connect.ts        # $connect route handler
 │   ├── disconnect.ts     # $disconnect route handler
-│   ├── message.ts        # $default route handler
-│   └── authorizer.ts     # Custom authorizer
+│   ├── message.ts        # $default route handler (core logic)
+│   └── authorizer.ts     # Lambda authorizer for JWT
 ├── services/
-│   ├── connection.ts     # Connection management
-│   ├── relay.ts          # Message relay logic
-│   └── session.ts        # Session management
+│   ├── connection.ts     # Connection CRUD operations
+│   ├── relay.ts          # Encrypted message relay
+│   └── session.ts        # Session lifecycle management
+├── utils/
+│   └── dynamodb.ts       # DynamoDB table operations
 └── edge/
-    ├── auth.ts           # Lambda@Edge authentication
-    ├── callback.ts       # OAuth callback handler
-    └── index.ts          # Request router
+    ├── auth.ts           # Lambda@Edge JWT authentication
+    ├── callback.ts       # Lambda@Edge OAuth callback
+    └── index.ts          # Edge function router
 ```
 
 ### 3. Web Client (`packages/web`)
@@ -78,20 +84,25 @@ Next.js 14 application providing browser-based terminal access.
 ```
 web/src/
 ├── app/                  # Next.js App Router
-│   ├── page.tsx         # Home page
-│   ├── session/[id]/    # Session terminal page
-│   └── layout.tsx       # Root layout
+│   ├── page.tsx         # Home page with CLI Connect button
+│   ├── login/page.tsx   # Cognito login page
+│   ├── scan/page.tsx    # QR code scanner page
+│   ├── join/page.tsx    # Session join page (from QR)
+│   ├── session/page.tsx # Terminal session view
+│   ├── sessions/page.tsx # List all active sessions
+│   └── layout.tsx       # Root layout with auth
 ├── components/
 │   ├── Terminal/        # xterm.js wrapper
-│   ├── QRScanner/       # QR code scanner
-│   └── Auth/            # Authentication UI
+│   └── QRScanner/       # QR code scanner
 ├── hooks/
 │   ├── useWebSocket.ts  # WebSocket connection
 │   ├── useCrypto.ts     # Encryption hook
 │   └── useSession.ts    # Session management
-└── lib/
-    ├── websocket.ts     # WebSocket client
-    └── crypto.ts        # Browser crypto
+├── lib/
+│   ├── websocket.ts     # WebSocket client
+│   └── crypto.ts        # Browser crypto
+└── stores/
+    └── session.ts       # Zustand global session store
 ```
 
 ### 4. Shared Library (`packages/shared`)
@@ -116,9 +127,15 @@ AWS CDK infrastructure as code for deploying all cloud resources.
 
 **Stack Components:**
 ```
-infra/lib/
-├── api-stack.ts         # API Gateway, Lambda, DynamoDB
-└── web-stack.ts         # CloudFront, S3, Lambda@Edge
+infra/
+├── bin/
+│   └── app.ts           # CDK app entry point
+└── lib/
+    ├── main-stack.ts    # Main construct orchestrating all stacks
+    ├── database-stack.ts # DynamoDB tables (connections, sessions, messages)
+    ├── auth-stack.ts    # Cognito User Pool configuration
+    ├── api-stack.ts     # API Gateway WebSocket + Lambda handlers
+    └── web-stack.ts     # CloudFront, S3, Lambda@Edge
 ```
 
 ## Data Flow

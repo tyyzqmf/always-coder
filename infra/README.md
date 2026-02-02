@@ -143,7 +143,7 @@ After deployment, CDK will output important values:
 ```
 Outputs:
 AlwaysCoderApiStack.WebSocketUrl = wss://abc123xyz.execute-api.us-east-1.amazonaws.com/prod
-AlwaysCoderApiStack.UserPoolId = us-east-1_AbCdEfGhI
+AlwaysCoderApiStack.UserPoolId = us-east-1_XXXXXXXXX
 AlwaysCoderApiStack.UserPoolClientId = 1abc2def3ghi4jkl5mno6pqr
 AlwaysCoderWebStack.WebUrl = https://d1234567890abc.cloudfront.net
 AlwaysCoderWebStack.WebBucketName = always-coder-web-abc123
@@ -157,7 +157,7 @@ Save these values - you'll need them for CLI installation.
 |--------|-------------|---------|
 | `WebSocketUrl` | WebSocket API endpoint | `wss://abc123.execute-api.us-east-1.amazonaws.com/prod` |
 | `WebUrl` | Web application URL | `https://d123abc.cloudfront.net` |
-| `UserPoolId` | Cognito User Pool ID | `us-east-1_AbCdEfGhI` |
+| `UserPoolId` | Cognito User Pool ID | `us-east-1_XXXXXXXXX` |
 | `UserPoolClientId` | Cognito App Client ID | `1abc2def3ghi4jkl5mno` |
 | `WebBucketName` | S3 bucket for web assets | `always-coder-web-abc123` |
 

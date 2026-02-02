@@ -138,6 +138,19 @@ When modifying authentication or encryption code:
 - **Use secure cookies** - HttpOnly, Secure, SameSite=Lax for auth tokens
 - **Validate JWT claims** - Check exp, iss, aud before trusting tokens
 
+### Documentation Security (IMPORTANT)
+
+When writing documentation with example values:
+- **Use obvious placeholders** - Use `XXXXXXXXX`, `xxx`, `your-value-here` instead of realistic-looking values
+- **Never use real-looking IDs** - Avoid patterns like `us-east-1_AbCdEfGh` that look like real AWS resource IDs
+- **Placeholder formats**:
+  - User Pool ID: `us-east-1_XXXXXXXXX` (not `us-east-1_AbCdEfGh`)
+  - Client ID: `xxxxxxxxxxxxxxxxxxxxxxxxxx` (not `1abc2def3ghi4jkl`)
+  - API endpoints: `https://xxx.execute-api.region.amazonaws.com/prod`
+  - Distribution ID: `EXXXXXXXXXXXXX`
+- **Run security scan before commit**: `pnpm security:scan` to check for leaked secrets
+- **Gitleaks configuration**: `.gitleaks.toml` defines allowlisted patterns - update if adding new example formats
+
 ## Git Workflow
 
 **IMPORTANT: Never commit directly to the `main` branch.** All changes must be submitted via Pull Request (PR).
@@ -164,9 +177,10 @@ After making code changes, you must redeploy and verify the changes work correct
 1. `pnpm build` - Ensure all packages compile
 2. `pnpm test` - Run unit tests
 3. `pnpm lint` - Check code style
-4. `cd infra && pnpm cdk deploy --all` - Deploy to AWS
-5. Test CLI: `always claude` or `always bash --daemon`
-6. Test Web: Navigate to CloudFront URL, login, connect to session
+4. `pnpm security:scan` - **Run security scan to check for leaked secrets**
+5. `cd infra && pnpm cdk deploy --all` - Deploy to AWS
+6. Test CLI: `always claude` or `always bash --daemon`
+7. Test Web: Navigate to CloudFront URL, login, connect to session
 
 ## Environment Variables
 

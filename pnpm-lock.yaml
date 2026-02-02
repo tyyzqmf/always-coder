@@ -17,6 +17,9 @@ importers:
       esbuild:
         specifier: ^0.27.2
         version: 0.27.2
+      husky:
+        specifier: ^9.0.0
+        version: 9.1.7
       prettier:
         specifier: ^3.2.4
         version: 3.8.1
@@ -4296,6 +4299,12 @@ packages:
   /human-signals@5.0.0:
     resolution: {integrity: sha512-AXcZb6vzzrFAUE61HnN4mpLqd/cSIwNQjtNWR0euPm6y0iqx3G4gOXaIDdtdDwZmhwe82LA6+zinmW4UBWVePQ==}
     engines: {node: '>=16.17.0'}
+    dev: true
+
+  /husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
     dev: true
 
   /ieee754@1.2.1:

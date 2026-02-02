@@ -1,0 +1,47 @@
+# Gitleaks configuration for Always Coder
+# This file configures false positive exclusions for secret scanning
+
+title = "Always Coder Gitleaks Config"
+
+[extend]
+# Extend the default gitleaks config
+useDefault = true
+
+# Global allowlist for false positives
+[allowlist]
+description = "Allowlist for documentation examples and algorithm names"
+
+# Allow encryption algorithm names and example placeholder values
+regexes = [
+  # Encryption algorithm names (not secrets)
+  '''XSalsa20-Poly1305''',
+  # Cognito User Pool ID placeholders in documentation
+  '''us-east-1_[Xx]+''',
+  '''us-east-1_AbCdEfGhI''',
+  # Example API key placeholders
+  '''1abc2def3ghi4jkl5mno''',
+  '''abc123xyz''',
+]
+
+# Allow documentation and example files
+paths = [
+  '''infra/README\.md$''',
+  '''docs/DEPLOYMENT\.md$''',
+  '''CLAUDE\.md$''',
+]
+
+# Specific commit allowlist for historical false positives
+commits = [
+  # Initial infrastructure documentation with example values
+  "a814bfa7aeef394def9465af66ad32e86df245d2",
+  # Documentation updates with algorithm references
+  "3ca14eed30a0f5b7630991e28d4c5f36e834caf3",
+]
+
+# Stop words - common strings that should never be flagged
+stopwords = [
+  "XSalsa20-Poly1305",
+  "XXXXXXXXX",
+  "example",
+  "placeholder",
+]

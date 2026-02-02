@@ -181,7 +181,7 @@ After successful deployment, note these outputs:
 ```
 Outputs:
 AlwaysCoderApiStack.WebSocketUrl = wss://abc123xyz.execute-api.us-east-1.amazonaws.com/prod
-AlwaysCoderApiStack.UserPoolId = us-east-1_AbCdEfGhI
+AlwaysCoderApiStack.UserPoolId = us-east-1_XXXXXXXXX
 AlwaysCoderApiStack.UserPoolClientId = 1abc2def3ghi4jkl5mno6pqr
 AlwaysCoderApiStack.ConnectionsTableName = AlwaysCoderApiStack-ConnectionsXXX
 AlwaysCoderApiStack.SessionsTableName = AlwaysCoderApiStack-SessionsXXX
