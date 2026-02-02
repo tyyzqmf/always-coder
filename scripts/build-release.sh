@@ -64,7 +64,12 @@ bun build packages/cli/dist/index.js \
   --minify
 
 # Fix shebang (Bun adds #!/usr/bin/env bun, we want node for portability)
-sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' "$BUNDLE_DIR/cli.js"
+# Use portable sed syntax that works on both macOS and Linux
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed -i '' '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' "$BUNDLE_DIR/cli.js"
+else
+  sed -i '1s|#!/usr/bin/env bun|#!/usr/bin/env node|' "$BUNDLE_DIR/cli.js"
+fi
 chmod +x "$BUNDLE_DIR/cli.js"
 echo -e "${GREEN}✓${NC} Bundle created ($(du -h "$BUNDLE_DIR/cli.js" | cut -f1))"
 
