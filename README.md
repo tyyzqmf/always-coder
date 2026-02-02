@@ -37,28 +37,13 @@ If you have access to an existing Always Coder server (someone has deployed the 
 # Install globally
 npm install -g @always-coder/cli
 
-# Configure server endpoints
-always init <server-url> <web-url>
-
-# Login (if authentication is required)
-always login
+# Login to your server
+always login --server https://your-server.example.com
 
 # Start Claude with remote access
 always claude
 
 # Scan the QR code with your phone or visit the web URL
-```
-
-**Or install via script:**
-```bash
-# One-line installation with auto-configuration
-curl -fsSL https://raw.githubusercontent.com/tyyzqmf/always-coder/main/install.sh | bash -s -- <server-url> <web-url>
-
-# Reload shell (first time only)
-source ~/.bashrc  # or source ~/.zshrc
-
-# Start using
-always claude
 ```
 
 ### Option 2: Self-Deployment (Full Stack)
@@ -94,12 +79,9 @@ pnpm cdk deploy --all
 ```bash
 # Option A: Install from npm
 npm install -g @always-coder/cli
-always init <WebSocketUrl> <WebUrl>
 
-# Option B: Use install script
-cd ..
-./install.sh <WebSocketUrl> <WebUrl>
-source ~/.bashrc
+# Login to your server
+always login --server https://your-server.example.com
 
 # Start using
 always claude
