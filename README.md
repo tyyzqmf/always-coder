@@ -1,5 +1,11 @@
 # Always Coder
 
+[![Node.js 20+](https://img.shields.io/badge/node-20%2B-brightgreen)](https://nodejs.org/)
+[![Bun](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh)
+[![pnpm 8+](https://img.shields.io/badge/pnpm-8%2B-orange)](https://pnpm.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Claude](https://img.shields.io/badge/powered%20by-claude-orange)](https://claude.ai)
+
 **Remote AI Coding Agent Control System** - Secure terminal access to Claude, Codex, and other AI assistants from anywhere via end-to-end encrypted WebSocket connections.
 
 ## Features
