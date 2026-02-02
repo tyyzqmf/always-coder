@@ -71,11 +71,14 @@ export default function SessionsPage() {
     try {
       const wsUrl = `${WS_ENDPOINT}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(wsUrl);
+      let receivedResponse = false;
 
       const timeout = setTimeout(() => {
         ws.close();
-        setError('Request timed out');
-        setIsLoading(false);
+        if (!receivedResponse) {
+          setError('Request timed out');
+          setIsLoading(false);
+        }
       }, 10000);
 
       ws.onopen = () => {
@@ -92,6 +95,7 @@ export default function SessionsPage() {
           const message = JSON.parse(event.data);
 
           if (message.type === MessageType.SESSION_LIST_RESPONSE) {
+            receivedResponse = true;
             clearTimeout(timeout);
             setSessions(message.sessions || []);
             setIsLoading(false);
@@ -99,6 +103,7 @@ export default function SessionsPage() {
             hasLoadedOnce.current = true;
             ws.close();
           } else if (message.type === MessageType.ERROR) {
+            receivedResponse = true;
             clearTimeout(timeout);
             setError(message.message || 'Server error');
             setIsLoading(false);
@@ -112,14 +117,16 @@ export default function SessionsPage() {
 
       ws.onerror = () => {
         clearTimeout(timeout);
-        setError('WebSocket connection failed');
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (!receivedResponse) {
+          setError('WebSocket connection failed');
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       };
 
       ws.onclose = (event) => {
         clearTimeout(timeout);
-        if (event.code !== 1000) {
+        if (!receivedResponse && event.code !== 1000) {
           setError(`Connection closed: ${event.reason || 'Unknown reason'}`);
           setIsLoading(false);
           setIsRefreshing(false);
