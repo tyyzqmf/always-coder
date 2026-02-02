@@ -8,6 +8,7 @@ export {
   isSessionListRequest,
   isSessionInfoRequest,
   isSessionUpdateRequest,
+  isSessionDeleteRequest,
   ErrorCodes,
   type ErrorCode,
 } from './messages.js';

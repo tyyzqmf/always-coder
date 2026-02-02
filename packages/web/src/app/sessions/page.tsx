@@ -256,7 +256,11 @@ export default function SessionsPage() {
               </h2>
               <div className="space-y-3">
                 {activeSessions.map((session) => (
-                  <SessionCard key={session.sessionId} session={session} />
+                  <SessionCard
+                    key={session.sessionId}
+                    session={session}
+                    onDelete={(id) => setSessions((prev) => prev.filter((s) => s.sessionId !== id))}
+                  />
                 ))}
               </div>
             </div>
@@ -274,6 +278,7 @@ export default function SessionsPage() {
                     key={session.sessionId}
                     session={session}
                     disabled
+                    onDelete={(id) => setSessions((prev) => prev.filter((s) => s.sessionId !== id))}
                   />
                 ))}
               </div>
@@ -288,10 +293,15 @@ export default function SessionsPage() {
 function SessionCard({
   session,
   disabled = false,
+  onDelete,
 }: {
   session: RemoteSessionInfo;
   disabled?: boolean;
+  onDelete?: (sessionId: string) => void;
 }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
   const status = formatStatus(session.status);
   const instanceDisplay = session.instanceLabel
     ? session.instanceLabel
@@ -306,6 +316,59 @@ function SessionCard({
   const handleConnect = () => {
     if (session.webUrl) {
       window.location.href = session.webUrl;
+    }
+  };
+
+  const handleDelete = async () => {
+    const token = getAccessToken();
+    if (!token) return;
+
+    setIsDeleting(true);
+    try {
+      const wsUrl = `${WS_ENDPOINT}?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+
+      const timeout = setTimeout(() => {
+        ws.close();
+        setIsDeleting(false);
+      }, 10000);
+
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({
+            type: MessageType.SESSION_DELETE_REQUEST,
+            sessionId: session.sessionId,
+          })
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === MessageType.SESSION_DELETE_RESPONSE) {
+            clearTimeout(timeout);
+            if (message.success) {
+              onDelete?.(session.sessionId);
+            }
+            setIsDeleting(false);
+            setShowConfirm(false);
+            ws.close();
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        setIsDeleting(false);
+      };
+
+      ws.onclose = () => {
+        clearTimeout(timeout);
+      };
+    } catch (err) {
+      setIsDeleting(false);
     }
   };
 
@@ -388,15 +451,58 @@ function SessionCard({
           </div>
         </div>
 
-        {/* Connect button */}
-        {!disabled && session.webUrl && (
-          <button
-            onClick={handleConnect}
-            className="px-4 py-2 bg-terminal-blue hover:bg-terminal-blue/80 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
-          >
-            Connect
-          </button>
-        )}
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          {/* Connect button */}
+          {!disabled && session.webUrl && (
+            <button
+              onClick={handleConnect}
+              className="px-4 py-2 bg-terminal-blue hover:bg-terminal-blue/80 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+            >
+              Connect
+            </button>
+          )}
+
+          {/* Delete button */}
+          {showConfirm ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-3 py-2 bg-terminal-red hover:bg-terminal-red/80 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={isDeleting}
+                className="px-3 py-2 text-terminal-fg/60 hover:text-terminal-fg border border-terminal-fg/20 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="p-2 text-terminal-fg/40 hover:text-terminal-red transition-colors"
+              title="Delete session"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
