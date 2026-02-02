@@ -7,6 +7,7 @@ import {
   isSessionListRequest,
   isSessionInfoRequest,
   isSessionUpdateRequest,
+  isSessionDeleteRequest,
   isEncryptedEnvelope,
   ErrorCodes,
 } from '@always-coder/shared';
@@ -19,6 +20,7 @@ import {
   reconnectSession,
   getUserSessions,
   updateSessionMetadata,
+  deleteSession,
 } from '../services/session.js';
 import {
   initializeApiClient,
@@ -111,6 +113,11 @@ export const handler: APIGatewayProxyHandler = async (event): Promise<APIGateway
     // Handle session update (CLI updating session metadata)
     if (isSessionUpdateRequest(body)) {
       return await handleSessionUpdate(connectionId, body, userId);
+    }
+
+    // Handle session delete request
+    if (isSessionDeleteRequest(body)) {
+      return await handleSessionDelete(connectionId, body.sessionId, userId);
     }
 
     console.warn('Unknown message type:', (body as Record<string, unknown>).type);
@@ -443,6 +450,67 @@ async function handleSessionUpdate(
   } catch (error) {
     console.error('Failed to update session:', error);
     return sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Failed to update session');
+  }
+}
+
+/**
+ * Handle SESSION_DELETE_REQUEST - delete a session
+ */
+async function handleSessionDelete(
+  connectionId: string,
+  sessionId: string,
+  userId: string
+): Promise<APIGatewayProxyResult> {
+  console.log('Session delete request:', { connectionId, sessionId, userId });
+
+  // Require authentication
+  if (userId === 'anonymous') {
+    return sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+  }
+
+  try {
+    // Get the session to verify ownership
+    const session = await getSession(sessionId);
+    if (!session) {
+      await sendToConnection(connectionId, {
+        type: MessageType.SESSION_DELETE_RESPONSE,
+        sessionId,
+        success: false,
+        message: 'Session not found',
+      });
+      return { statusCode: 200, body: 'OK' };
+    }
+
+    // Verify user owns this session
+    if (session.userId !== userId) {
+      await sendToConnection(connectionId, {
+        type: MessageType.SESSION_DELETE_RESPONSE,
+        sessionId,
+        success: false,
+        message: 'Unauthorized',
+      });
+      return { statusCode: 200, body: 'OK' };
+    }
+
+    // Delete the session
+    await deleteSession(sessionId);
+
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_DELETE_RESPONSE,
+      sessionId,
+      success: true,
+    });
+
+    return { statusCode: 200, body: 'OK' };
+  } catch (error) {
+    console.error('Failed to delete session:', error);
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_DELETE_RESPONSE,
+      sessionId,
+      success: false,
+      message: 'Failed to delete session',
+    });
+    return { statusCode: 500, body: 'Failed to delete session' };
   }
 }
 

@@ -18,6 +18,8 @@ export enum MessageType {
   SESSION_INFO_REQUEST = 'session:info:request',
   SESSION_INFO_RESPONSE = 'session:info:response',
   SESSION_UPDATE = 'session:update',
+  SESSION_DELETE_REQUEST = 'session:delete:request',
+  SESSION_DELETE_RESPONSE = 'session:delete:response',
 
   // Connection events
   WEB_CONNECTED = 'web:connected',
@@ -205,4 +207,20 @@ export interface SessionUpdatePayload {
   command?: string;
   commandArgs?: string[];
   webUrl?: string;
+}
+
+/**
+ * Session delete request payload
+ */
+export interface SessionDeleteRequestPayload {
+  sessionId: string;
+}
+
+/**
+ * Session delete response payload
+ */
+export interface SessionDeleteResponsePayload {
+  sessionId: string;
+  success: boolean;
+  message?: string;
 }

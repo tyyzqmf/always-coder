@@ -128,6 +128,17 @@ export function isSessionUpdateRequest(
 }
 
 /**
+ * Type guard for session delete request
+ */
+export function isSessionDeleteRequest(
+  data: unknown
+): data is { type: MessageType.SESSION_DELETE_REQUEST; sessionId: string } {
+  if (typeof data !== 'object' || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return msg.type === MessageType.SESSION_DELETE_REQUEST && typeof msg.sessionId === 'string';
+}
+
+/**
  * Error codes
  */
 export const ErrorCodes = {
