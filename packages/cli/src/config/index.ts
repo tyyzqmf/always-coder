@@ -255,12 +255,21 @@ export async function fetchServerConfig(serverUrl: string): Promise<ServerConfig
 
     return config;
   } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error(`Failed to connect to ${configUrl}. Please check the URL and try again.`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Check for common network/fetch errors
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Failed to connect to ${configUrl}.\n` +
+          `  Error: ${errorMessage}\n` +
+          `  Please check:\n` +
+          `  - The URL is correct and accessible\n` +
+          `  - You have Node.js 18+ installed (run: node --version)\n` +
+          `  - Your network connection is working (try: curl ${configUrl})`
+      );
     }
-    throw new Error(
-      `Failed to fetch server configuration from ${configUrl}: ${error instanceof Error ? error.message : String(error)}`
-    );
+
+    throw new Error(`Failed to fetch server configuration from ${configUrl}: ${errorMessage}`);
   }
 }
 

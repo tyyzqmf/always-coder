@@ -75,10 +75,10 @@ program
   .description('Always Coder - Remote AI coding agent control')
   .version('1.0.0');
 
-// Main command: wrap a command
+// Main command: wrap a command (using default command to avoid conflict with subcommands)
 program
-  .argument('[command]', 'Command to run (default: claude)')
-  .argument('[args...]', 'Arguments to pass to the command')
+  .command('run [command] [args...]', { isDefault: true })
+  .description('Run a command with remote terminal access (default: claude)')
   .option('-s, --server <url>', 'WebSocket server URL')
   .option('-d, --daemon', 'Run in background (daemon mode)')
   .option('--daemon-child', 'Internal flag for daemon child process')
