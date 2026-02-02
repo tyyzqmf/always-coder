@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Shared types, crypto, and protocol definitions for Always Coder",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "keywords": [
     "always-coder",
     "shared",

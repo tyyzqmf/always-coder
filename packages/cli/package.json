@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Remote AI coding agent control - access Claude, Codex, and other AI assistants from anywhere",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "bin": {
     "always": "./dist/index.js"
   },
