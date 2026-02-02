@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { MessageType, type RemoteSessionInfo } from '@always-coder/shared';
 
@@ -42,16 +42,23 @@ function formatStatus(status: string): { label: string; color: string } {
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<RemoteSessionInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
+  const hasLoadedOnce = useRef(false);
 
   useEffect(() => {
     setUserEmail(getUserEmail());
   }, []);
 
-  const fetchSessions = useCallback(async () => {
-    setIsLoading(true);
+  const fetchSessions = useCallback(async (isManualRefresh = false) => {
+    // Only show full loading state on initial load, not on refresh
+    if (!isManualRefresh && !hasLoadedOnce.current) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     setError(null);
 
     const token = getAccessToken();
@@ -88,11 +95,14 @@ export default function SessionsPage() {
             clearTimeout(timeout);
             setSessions(message.sessions || []);
             setIsLoading(false);
+            setIsRefreshing(false);
+            hasLoadedOnce.current = true;
             ws.close();
           } else if (message.type === MessageType.ERROR) {
             clearTimeout(timeout);
             setError(message.message || 'Server error');
             setIsLoading(false);
+            setIsRefreshing(false);
             ws.close();
           }
         } catch (e) {
@@ -104,20 +114,24 @@ export default function SessionsPage() {
         clearTimeout(timeout);
         setError('WebSocket connection failed');
         setIsLoading(false);
+        setIsRefreshing(false);
       };
 
       ws.onclose = (event) => {
         clearTimeout(timeout);
-        if (event.code !== 1000 && !error) {
+        if (event.code !== 1000) {
           setError(`Connection closed: ${event.reason || 'Unknown reason'}`);
           setIsLoading(false);
+          setIsRefreshing(false);
         }
       };
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect');
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [includeInactive, error]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeInactive]);
 
   useEffect(() => {
     fetchSessions();
@@ -181,11 +195,14 @@ export default function SessionsPage() {
           Show closed sessions
         </label>
         <button
-          onClick={fetchSessions}
-          disabled={isLoading}
-          className="px-3 py-1 text-sm text-terminal-blue hover:text-terminal-blue/80 disabled:text-terminal-fg/30 transition-colors"
+          onClick={() => fetchSessions(true)}
+          disabled={isLoading || isRefreshing}
+          className="px-3 py-1 text-sm text-terminal-blue hover:text-terminal-blue/80 disabled:text-terminal-fg/30 transition-colors flex items-center gap-2"
         >
-          {isLoading ? 'Refreshing...' : 'Refresh'}
+          {isRefreshing && (
+            <div className="animate-spin w-3 h-3 border border-terminal-blue border-t-transparent rounded-full" />
+          )}
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
