@@ -1,6 +1,12 @@
 import { EventEmitter } from 'events';
 import { createWriteStream, appendFileSync, type WriteStream } from 'fs';
-import { MessageType, type EncryptedEnvelope } from '@always-coder/shared';
+import {
+  MessageType,
+  type EncryptedEnvelope,
+  InputFilter,
+  type InputFilterConfig,
+  DEFAULT_INPUT_FILTER_CONFIG,
+} from '@always-coder/shared';
 import { WebSocketClient } from '../websocket/client.js';
 import { EncryptionManager } from '../crypto/encryption.js';
 import { Terminal, type TerminalOptions } from '../pty/terminal.js';
@@ -31,6 +37,10 @@ export interface SessionManagerOptions {
   serverUrl?: string;
   daemon?: boolean;
   logFile?: string;
+  /** Enable/disable web input filtering (default: true) */
+  filterWebInput?: boolean;
+  /** Custom input filter configuration */
+  inputFilterConfig?: Partial<InputFilterConfig>;
 }
 
 /**
@@ -51,12 +61,27 @@ export class SessionManager extends EventEmitter {
     instanceInfo: InstanceInfo;
     sessionWebUrl: string;
   } | null = null;
+  private inputFilter: InputFilter;
 
   constructor(options: SessionManagerOptions) {
     super();
     this.options = options;
     this.encryption = new EncryptionManager();
     this.isDaemon = options.daemon || false;
+
+    // Set up input filter for web client signals
+    // By default, block dangerous signals (Ctrl+C, Ctrl+D, etc.) from web clients
+    // to prevent accidental session termination
+    const filterEnabled = options.filterWebInput !== false;
+    const filterConfig: InputFilterConfig = filterEnabled
+      ? { ...DEFAULT_INPUT_FILTER_CONFIG, ...options.inputFilterConfig }
+      : {
+          blockCtrlC: false,
+          blockCtrlD: false,
+          blockCtrlZ: false,
+          blockCtrlBackslash: false,
+        };
+    this.inputFilter = new InputFilter(filterConfig);
 
     // Set up logging for daemon mode
     if (this.isDaemon && options.logFile) {
@@ -262,7 +287,7 @@ export class SessionManager extends EventEmitter {
    */
   private handleEncryptedMessage(envelope: EncryptedEnvelope): void {
     if (!this.encryption.isReady()) {
-      console.warn('Received encrypted message but encryption not ready');
+      this.logError('Received encrypted message but encryption not ready - message discarded');
       return;
     }
 
@@ -271,11 +296,27 @@ export class SessionManager extends EventEmitter {
 
       switch (message.type) {
         case MessageType.TERMINAL_INPUT:
-          this.handleTerminalInput(message.payload as string);
+          // Validate payload type before processing
+          if (typeof message.payload !== 'string') {
+            this.logError(`Invalid TERMINAL_INPUT payload type: ${typeof message.payload}`);
+            return;
+          }
+          this.handleTerminalInput(message.payload);
           break;
 
         case MessageType.TERMINAL_RESIZE:
-          this.handleTerminalResize(message.payload as { cols: number; rows: number });
+          // Validate payload type before processing
+          const resizePayload = message.payload as { cols?: unknown; rows?: unknown };
+          if (
+            typeof resizePayload?.cols !== 'number' ||
+            typeof resizePayload?.rows !== 'number' ||
+            resizePayload.cols <= 0 ||
+            resizePayload.rows <= 0
+          ) {
+            this.logError(`Invalid TERMINAL_RESIZE payload: ${JSON.stringify(resizePayload)}`);
+            return;
+          }
+          this.handleTerminalResize({ cols: resizePayload.cols, rows: resizePayload.rows });
           break;
 
         case MessageType.STATE_REQUEST:
@@ -283,11 +324,19 @@ export class SessionManager extends EventEmitter {
           break;
 
         default:
-          console.log('Unknown message type:', message.type);
+          this.logError(`Unknown message type: ${message.type}`);
       }
     } catch (error) {
-      console.error('Failed to decrypt message:', error);
+      this.logError('Failed to decrypt message from web client', error);
     }
+  }
+
+  /**
+   * Filter web client input for dangerous control signals
+   * @returns FilterResult with filtered data and blocked signal info
+   */
+  private filterWebInput(data: string) {
+    return this.inputFilter.filter(data);
   }
 
   /**
@@ -295,7 +344,19 @@ export class SessionManager extends EventEmitter {
    */
   private handleTerminalInput(data: string): void {
     if (this.terminal && this.terminal.isRunning()) {
-      this.terminal.write(data);
+      // Filter dangerous control signals from web input
+      const result = this.filterWebInput(data);
+
+      if (result.blocked) {
+        this.log(
+          chalk.yellow(`⚠ Blocked control signals from web: ${result.blockedSignals.join(', ')}`)
+        );
+      }
+
+      // Only write filtered data to terminal
+      if (result.data.length > 0) {
+        this.terminal.write(result.data);
+      }
     }
   }
 
@@ -429,10 +490,7 @@ export class SessionManager extends EventEmitter {
         appendFileSync(logFile, `[${new Date().toISOString()}] Sent terminal output: ${data.length} bytes\n`);
       }
     } catch (error) {
-      console.error('Failed to send terminal output:', error);
-      if (this.isDaemon && logFile) {
-        appendFileSync(logFile, `[${new Date().toISOString()}] ERROR sending output: ${error}\n`);
-      }
+      this.logError('Failed to send terminal output', error);
     }
   }
 
@@ -455,7 +513,7 @@ export class SessionManager extends EventEmitter {
         });
         this.wsClient?.sendEncrypted(envelope);
       } catch (error) {
-        console.error('Failed to send state sync:', error);
+        this.logError('Failed to send state sync', error);
       }
     }
   }

@@ -6,3 +6,6 @@ export * from './crypto/index.js';
 
 // Re-export protocol
 export * from './protocol/index.js';
+
+// Re-export input filter
+export * from './input/index.js';
