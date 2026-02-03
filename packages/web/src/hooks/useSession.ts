@@ -108,10 +108,13 @@ export function useSession(options: UseSessionOptions = {}) {
     // If CLI is temporarily disconnected, show waiting state
     // Otherwise, show connected state
     if (data.cliDisconnected) {
+      // Mark CLI as temporarily disconnected so CONNECTION_FAILED errors don't show fatal error
+      cliDisconnectedRef.current = true;
       setConnectionStatus('connecting'); // Show as "waiting for CLI"
       // Note: Don't use setError here as it also sets status to 'error'
       // The UI should check connectionStatus to show appropriate message
     } else {
+      cliDisconnectedRef.current = false;
       setConnectionStatus('connected');
       clearError();
     }
@@ -125,6 +128,8 @@ export function useSession(options: UseSessionOptions = {}) {
   ]);
 
   const handleCliDisconnected = useCallback(() => {
+    // Mark CLI as temporarily disconnected so CONNECTION_FAILED errors don't show fatal error
+    cliDisconnectedRef.current = true;
     // Show waiting state - CLI might reconnect
     // Note: Don't use setError here as it also sets status to 'error'
     // The UI should check connectionStatus to show appropriate message
@@ -138,6 +143,10 @@ export function useSession(options: UseSessionOptions = {}) {
 
   const handleCliReconnected = useCallback((data: { cliPublicKey: string }) => {
     console.log('CLI reconnected, re-establishing encryption');
+
+    // Mark CLI as connected again
+    cliDisconnectedRef.current = false;
+
     setCliPublicKey(data.cliPublicKey);
 
     // Re-establish the shared key with CLI's new/current public key
@@ -173,6 +182,9 @@ export function useSession(options: UseSessionOptions = {}) {
     }
   }, [setConnectionStatus]);
 
+  // Track if CLI is temporarily disconnected (waiting for reconnection)
+  const cliDisconnectedRef = useRef(false);
+
   const handleServerError = useCallback((code: string, message: string) => {
     console.error('Server error:', code, message);
 
@@ -182,6 +194,13 @@ export function useSession(options: UseSessionOptions = {}) {
       reset();
       setError('Session not found or expired. Please scan the QR code again.');
     } else if (code === 'CONNECTION_FAILED') {
+      // If CLI is temporarily disconnected, don't show error - just wait for reconnection
+      // This handles the race condition where web sends a message while CLI is reconnecting
+      if (cliDisconnectedRef.current) {
+        console.log('CLI temporarily disconnected, waiting for reconnection...');
+        // Keep the 'connecting' state set by handleCliDisconnected
+        return;
+      }
       setError('CLI is not connected. Please ensure the CLI is running.');
     } else {
       setError(message || 'An error occurred');
@@ -247,6 +266,7 @@ export function useSession(options: UseSessionOptions = {}) {
   const disconnectSession = useCallback((clearState = false) => {
     disconnect();
     setConnectionStatus('disconnected');
+    cliDisconnectedRef.current = false;
 
     // Optionally clear all stored state (e.g., when user explicitly disconnects)
     if (clearState) {
