@@ -1,6 +1,6 @@
 {
   "name": "@always-coder/cli",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Remote AI coding agent control - access Claude, Codex, and other AI assistants from anywhere",
   "type": "module",
   "publishConfig": {
@@ -44,7 +44,7 @@
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
-    "@always-coder/shared": "^1.0.0",
+    "@always-coder/shared": "^1.1.0",
     "amazon-cognito-identity-js": "^6.3.16",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
