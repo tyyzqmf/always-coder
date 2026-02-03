@@ -265,10 +265,22 @@ async function handleSessionJoin(
   const cliNotified = await notifyWebConnected(session, publicKey, connectionId);
 
   if (!cliNotified) {
-    // CLI connection is stale, notify web
-    console.log('CLI connection is stale, notifying web');
+    // CLI connection is stale - treat like temporarily disconnected
+    // This can happen if CLI disconnects but session status hasn't updated yet
+    console.log('CLI connection is stale, web will wait for CLI to reconnect:', { sessionId, connectionId });
+
+    // Send session info to web (with CLI's public key for future key exchange)
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_JOINED,
+      sessionId,
+      cliPublicKey: session.cliPublicKey,
+      cliDisconnected: true, // Signal that CLI is currently disconnected
+    });
+
+    // Also send a cli:disconnected notification so web shows waiting state
     await sendToConnection(connectionId, { type: 'cli:disconnected' });
-    return sendError(connectionId, ErrorCodes.CONNECTION_FAILED, 'CLI not connected');
+
+    return { statusCode: 200, body: 'Session joined, waiting for CLI' };
   }
 
   // Send session info to web (with CLI's public key for key exchange)
