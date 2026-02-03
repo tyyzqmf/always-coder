@@ -3,6 +3,14 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Read version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(fs.readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+const VERSION = packageJson.version;
 import { SessionManager } from './session/manager.js';
 import {
   loadConfig,
@@ -73,7 +81,7 @@ const program = new Command();
 program
   .name('always')
   .description('Always Coder - Remote AI coding agent control')
-  .version('1.0.0');
+  .version(VERSION);
 
 // Main command: wrap a command (using default command to avoid conflict with subcommands)
 program
