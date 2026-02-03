@@ -7,9 +7,10 @@ import type { EncryptedEnvelope } from '@always-coder/shared';
 const WS_ENDPOINT = process.env.NEXT_PUBLIC_WS_ENDPOINT || 'wss://your-api.execute-api.us-east-1.amazonaws.com/prod';
 
 interface UseWebSocketOptions {
-  onSessionJoined?: (data: { sessionId: string; cliPublicKey: string }) => void;
+  onSessionJoined?: (data: { sessionId: string; cliPublicKey: string; cliDisconnected?: boolean }) => void;
   onEncrypted?: (envelope: EncryptedEnvelope) => void;
   onCliDisconnected?: () => void;
+  onCliReconnected?: (data: { cliPublicKey: string }) => void;
   onStatusChange?: (connected: boolean) => void;
   onServerError?: (code: string, message: string) => void;
 }
@@ -38,6 +39,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       onSessionJoined: (data) => optionsRef.current.onSessionJoined?.(data),
       onEncrypted: (envelope) => optionsRef.current.onEncrypted?.(envelope),
       onCliDisconnected: () => optionsRef.current.onCliDisconnected?.(),
+      onCliReconnected: (data) => optionsRef.current.onCliReconnected?.(data),
       onServerError: (code, message) => optionsRef.current.onServerError?.(code, message),
     });
 

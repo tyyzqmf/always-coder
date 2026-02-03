@@ -145,3 +145,15 @@ export async function notifyCliDisconnected(session: Session): Promise<void> {
 
   await relayToWeb(session, data);
 }
+
+/**
+ * Notify web clients that CLI reconnected
+ */
+export async function notifyCliReconnected(session: Session): Promise<void> {
+  const data = {
+    type: 'cli:reconnected',
+    cliPublicKey: session.cliPublicKey,
+  };
+
+  await relayToWeb(session, data);
+}

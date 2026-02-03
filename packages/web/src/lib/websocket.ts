@@ -4,9 +4,10 @@ export type WebSocketEventHandler = {
   onOpen?: () => void;
   onClose?: (code: number, reason: string) => void;
   onError?: (error: Event) => void;
-  onSessionJoined?: (data: { sessionId: string; cliPublicKey: string }) => void;
+  onSessionJoined?: (data: { sessionId: string; cliPublicKey: string; cliDisconnected?: boolean }) => void;
   onEncrypted?: (envelope: EncryptedEnvelope) => void;
   onCliDisconnected?: () => void;
+  onCliReconnected?: (data: { cliPublicKey: string }) => void;
   onPong?: () => void;
   onServerError?: (code: string, message: string) => void;
 };
@@ -74,6 +75,8 @@ export class WebSocketManager {
         this.handlers.onServerError?.(message.code, message.message);
       } else if (message.type === 'cli:disconnected') {
         this.handlers.onCliDisconnected?.();
+      } else if (message.type === 'cli:reconnected') {
+        this.handlers.onCliReconnected?.(message);
       } else if (message.type === MessageType.PONG) {
         this.handlers.onPong?.();
       } else if (isEncryptedEnvelope(message)) {

@@ -23,6 +23,7 @@ export function useSession(options: UseSessionOptions = {}) {
     setConnectionStatus,
     setEncryptionReady,
     setError,
+    clearError,
     reset,
   } = useSessionStore();
 
@@ -82,8 +83,8 @@ export function useSession(options: UseSessionOptions = {}) {
     }
   }, [isReady, decrypt, options, setError, clearCrypto]);
 
-  const handleSessionJoined = useCallback((data: { sessionId: string; cliPublicKey: string }) => {
-    console.log('Session joined:', data.sessionId);
+  const handleSessionJoined = useCallback((data: { sessionId: string; cliPublicKey: string; cliDisconnected?: boolean }) => {
+    console.log('Session joined:', data.sessionId, { cliDisconnected: data.cliDisconnected });
     setCliPublicKey(data.cliPublicKey);
 
     // Always (re-)establish the shared key because:
@@ -103,18 +104,66 @@ export function useSession(options: UseSessionOptions = {}) {
     // Reset decryption failure counter on successful connection
     decryptionFailuresRef.current = 0;
     setEncryptionReady(true);
-    setConnectionStatus('connected');
+
+    // If CLI is temporarily disconnected, show waiting state
+    // Otherwise, show connected state
+    if (data.cliDisconnected) {
+      setConnectionStatus('connecting'); // Show as "waiting for CLI"
+      // Note: Don't use setError here as it also sets status to 'error'
+      // The UI should check connectionStatus to show appropriate message
+    } else {
+      setConnectionStatus('connected');
+      clearError();
+    }
   }, [
     setCliPublicKey,
     isCliKeyChanged,
     reestablishSharedKey,
     setEncryptionReady,
     setConnectionStatus,
+    clearError,
   ]);
 
   const handleCliDisconnected = useCallback(() => {
-    setError('CLI disconnected');
-  }, [setError]);
+    // Show waiting state - CLI might reconnect
+    // Note: Don't use setError here as it also sets status to 'error'
+    // The UI should check connectionStatus to show appropriate message
+    setConnectionStatus('connecting');
+  }, [setConnectionStatus]);
+
+  // Store refs for use in handleCliReconnected
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+  const joinSessionRef = useRef<((sessionId: string, publicKey: string) => void) | null>(null);
+
+  const handleCliReconnected = useCallback((data: { cliPublicKey: string }) => {
+    console.log('CLI reconnected, re-establishing encryption');
+    setCliPublicKey(data.cliPublicKey);
+
+    // Re-establish the shared key with CLI's new/current public key
+    reestablishSharedKey(data.cliPublicKey);
+
+    // Reset decryption failure counter
+    decryptionFailuresRef.current = 0;
+    setEncryptionReady(true);
+    setConnectionStatus('connected');
+
+    // Clear any error messages
+    clearError();
+
+    // Re-send our public key to CLI so it can establish encryption with us
+    // The server will relay this to CLI via web:connected notification
+    if (sessionIdRef.current && joinSessionRef.current) {
+      joinSessionRef.current(sessionIdRef.current, getPublicKey());
+    }
+  }, [
+    setCliPublicKey,
+    reestablishSharedKey,
+    setEncryptionReady,
+    setConnectionStatus,
+    clearError,
+    getPublicKey,
+  ]);
 
   const handleStatusChange = useCallback((connected: boolean) => {
     // Use getState() to avoid dependency on connectionStatus which causes infinite loops
@@ -143,9 +192,13 @@ export function useSession(options: UseSessionOptions = {}) {
     onSessionJoined: handleSessionJoined,
     onEncrypted: handleEncrypted,
     onCliDisconnected: handleCliDisconnected,
+    onCliReconnected: handleCliReconnected,
     onStatusChange: handleStatusChange,
     onServerError: handleServerError,
   });
+
+  // Set up ref for use in handleCliReconnected
+  joinSessionRef.current = joinSession;
 
   const connectToSession = useCallback(async (targetSessionId: string, _isReconnect = false) => {
     setSessionId(targetSessionId);

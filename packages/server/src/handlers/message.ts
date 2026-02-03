@@ -1,6 +1,7 @@
 import type { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda';
 import {
   MessageType,
+  SessionStatus,
   isSessionCreateRequest,
   isSessionReconnectRequest,
   isSessionJoinRequest,
@@ -28,6 +29,7 @@ import {
   relayToWeb,
   relayToCli,
   notifyWebConnected,
+  notifyCliReconnected,
 } from '../services/relay.js';
 import { cacheMessage, getRecentMessages } from '../utils/dynamodb.js';
 
@@ -181,7 +183,7 @@ async function handleSessionReconnect(
   }
 
   // Update the session with new CLI connectionId
-  await reconnectSession(sessionId, connectionId);
+  const updatedSession = await reconnectSession(sessionId, connectionId);
 
   // Register the CLI connection with userId
   await registerConnection(connectionId, sessionId, 'cli', publicKey, userId);
@@ -192,6 +194,16 @@ async function handleSessionReconnect(
     sessionId,
     wsEndpoint,
   });
+
+  // Notify any waiting web clients that CLI has reconnected
+  // This is important for web clients that joined while CLI was disconnected
+  if (updatedSession && updatedSession.webConnectionIds.length > 0) {
+    console.log('Notifying web clients of CLI reconnection:', {
+      sessionId,
+      webClients: updatedSession.webConnectionIds.length,
+    });
+    await notifyCliReconnected(updatedSession);
+  }
 
   console.log('Session reconnected successfully:', { sessionId, connectionId });
 
@@ -209,23 +221,45 @@ async function handleSessionJoin(
 ): Promise<APIGatewayProxyResult> {
   console.log('Joining session:', { sessionId, connectionId, userId });
 
-  // Check if session is active
-  const isActive = await isSessionActive(sessionId);
-  if (!isActive) {
+  // Get the session first
+  const session = await getSession(sessionId);
+  if (!session) {
     return sendError(connectionId, ErrorCodes.SESSION_NOT_FOUND, 'Session not found or expired');
   }
 
-  // Get the session
-  const session = await getSession(sessionId);
-  if (!session) {
-    return sendError(connectionId, ErrorCodes.SESSION_NOT_FOUND, 'Session not found');
-  }
+  // Check if session is active (PENDING, ACTIVE, or PAUSED)
+  const isActive = await isSessionActive(sessionId);
+
+  // If session exists but CLI is disconnected (CLOSED status), allow web to join
+  // and wait for CLI to reconnect. This handles the race condition when both
+  // CLI and web reconnect after network interruption.
+  const isCliTemporarilyDisconnected = !isActive && session.status === SessionStatus.CLOSED;
 
   // Register the web connection with userId
   await registerConnection(connectionId, sessionId, 'web', publicKey, userId);
 
   // Add web connection to session
   await joinSession(sessionId, connectionId);
+
+  // If CLI is temporarily disconnected, send session info to web so it can wait
+  // for CLI to reconnect. When CLI reconnects, it will send SESSION_RECONNECT
+  // and the relay service will notify web clients.
+  if (isCliTemporarilyDisconnected) {
+    console.log('CLI temporarily disconnected, web joining to wait:', { sessionId, connectionId });
+
+    // Send session info to web (with CLI's public key for future key exchange)
+    await sendToConnection(connectionId, {
+      type: MessageType.SESSION_JOINED,
+      sessionId,
+      cliPublicKey: session.cliPublicKey,
+      cliDisconnected: true, // Signal that CLI is currently disconnected
+    });
+
+    // Also send a cli:disconnected notification so web shows waiting state
+    await sendToConnection(connectionId, { type: 'cli:disconnected' });
+
+    return { statusCode: 200, body: 'Session joined, waiting for CLI' };
+  }
 
   // Notify CLI about new web connection (with web's public key)
   const cliNotified = await notifyWebConnected(session, publicKey, connectionId);
