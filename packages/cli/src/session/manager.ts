@@ -226,6 +226,13 @@ export class SessionManager extends EventEmitter {
 
     this.wsClient.on('web:connected', (data: { publicKey: string; connectionId: string }) => {
       try {
+        // Skip duplicate web:connected events for the same connection
+        // This can happen when events queue up during WebSocket reconnection
+        if (this.connectedWebClients.has(data.connectionId)) {
+          this.log(chalk.gray(`   Skipping duplicate web:connected for: ${data.connectionId}`));
+          return;
+        }
+
         this.log(chalk.green(`✓ Web client connected: ${data.connectionId}`));
         this.log(chalk.gray(`   Public key: ${data.publicKey.substring(0, 20)}...`));
         this.connectedWebClients.add(data.connectionId);
@@ -473,7 +480,8 @@ export class SessionManager extends EventEmitter {
    * Send terminal output to web clients
    */
   private sendTerminalOutput(data: string): void {
-    if (!this.wsClient || !this.encryption.isReady()) return;
+    // Check if WebSocket is actually connected (not just exists)
+    if (!this.wsClient || !this.wsClient.isConnected() || !this.encryption.isReady()) return;
 
     const logFile = this.options.logFile;
 
@@ -498,6 +506,11 @@ export class SessionManager extends EventEmitter {
    * Send buffered output to late-joining clients
    */
   private sendBufferedOutput(): void {
+    // Check if WebSocket is actually connected before sending
+    if (!this.wsClient || !this.wsClient.isConnected() || !this.encryption.isReady()) {
+      return;
+    }
+
     if (this.terminalBuffer.length > 0) {
       this.sendTerminalOutput(this.terminalBuffer);
     }
@@ -511,7 +524,7 @@ export class SessionManager extends EventEmitter {
           rows,
           hasHistory: this.terminalBuffer.length > 0,
         });
-        this.wsClient?.sendEncrypted(envelope);
+        this.wsClient.sendEncrypted(envelope);
       } catch (error) {
         this.logError('Failed to send state sync', error);
       }
