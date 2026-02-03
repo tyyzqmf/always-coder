@@ -37,6 +37,9 @@ yarn-error.log*
 # Test coverage
 coverage/
 
+# Test artifacts
+testing/screenshots/
+
 # Bun
 bun.lockb
 

@@ -106,6 +106,9 @@ export async function updateSession(
   const expressionAttributeNames: Record<string, string> = {};
   const expressionAttributeValues: Record<string, unknown> = {};
 
+  // Track which fields are being updated to avoid duplicates
+  const updatedFields = new Set<string>();
+
   Object.entries(updates).forEach(([key, value]) => {
     if (value !== undefined && key !== 'sessionId') {
       const attrName = `#${key}`;
@@ -113,17 +116,22 @@ export async function updateSession(
       updateExpressions.push(`${attrName} = ${attrValue}`);
       expressionAttributeNames[attrName] = key;
       expressionAttributeValues[attrValue] = value;
+      updatedFields.add(key);
     }
   });
 
-  // Always update lastActiveAt and ttl
-  updateExpressions.push('#lastActiveAt = :lastActiveAt');
-  expressionAttributeNames['#lastActiveAt'] = 'lastActiveAt';
-  expressionAttributeValues[':lastActiveAt'] = Date.now();
+  // Always update lastActiveAt and ttl (unless already provided in updates)
+  if (!updatedFields.has('lastActiveAt')) {
+    updateExpressions.push('#lastActiveAt = :lastActiveAt');
+    expressionAttributeNames['#lastActiveAt'] = 'lastActiveAt';
+    expressionAttributeValues[':lastActiveAt'] = Date.now();
+  }
 
-  updateExpressions.push('#ttl = :ttl');
-  expressionAttributeNames['#ttl'] = 'ttl';
-  expressionAttributeValues[':ttl'] = getTTL();
+  if (!updatedFields.has('ttl')) {
+    updateExpressions.push('#ttl = :ttl');
+    expressionAttributeNames['#ttl'] = 'ttl';
+    expressionAttributeValues[':ttl'] = getTTL();
+  }
 
   const input: UpdateCommandInput = {
     TableName: SESSIONS_TABLE,
