@@ -38,6 +38,9 @@ yarn-error.log*
 coverage/
 
 # Test artifacts
+testing/*.png
+testing/*.jpg
+testing/*.jpeg
 testing/screenshots/
 
 # Bun
