@@ -182,6 +182,29 @@ After making code changes, you must redeploy and verify the changes work correct
 6. Test CLI: `always claude` or `always bash --daemon`
 7. Test Web: Navigate to CloudFront URL, login, connect to session
 
+## Release Workflow
+
+**IMPORTANT**: CLI releases are automated via GitHub Actions. Do NOT run `npm publish` locally.
+
+### How to Release a New CLI Version
+1. Update version in `packages/cli/package.json`
+2. Commit and merge to main via PR
+3. Create and push a version tag:
+   ```bash
+   git tag -a v1.x.x -m "Release v1.x.x - Description"
+   git push origin v1.x.x
+   ```
+4. GitHub Actions will automatically:
+   - Build binaries for all platforms (linux-x64, darwin-x64, darwin-arm64)
+   - Create a GitHub Release with artifacts
+   - Publish to npm using the `NPM_TOKEN` secret
+
+### Release Workflow Details
+- **Trigger**: Push tag matching `v*` pattern
+- **Workflow file**: `.github/workflows/release.yml`
+- **NPM Token**: Stored in GitHub repository secrets as `NPM_TOKEN`
+- **No local npm login required** - authentication handled by GitHub Actions
+
 ## Environment Variables
 
 - `ALWAYS_CODER_SERVER` - WebSocket endpoint URL
