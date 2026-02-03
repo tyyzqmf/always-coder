@@ -10,13 +10,39 @@ Verify that CLI sessions remain running after web client disconnection and suppo
 | Web URL | `<YOUR_WEB_URL>` |
 | WebSocket | `<YOUR_WEBSOCKET_URL>` |
 | Cognito Region | `<YOUR_REGION>` |
-| CLI Version | >= 1.1.1 |
+| CLI Version | >= 1.1.2 |
 
 > Note: After deployment, you can get the actual addresses from `cd infra && pnpm cdk deploy --all` output
 
 ## Prerequisites
 1. Test user created in Cognito
 2. Node.js >= 20.0.0
+
+## Log Monitoring
+
+### CLI Log Monitoring
+
+**Important**: Throughout the test, keep a terminal window open to monitor CLI logs. CLI sessions started with `-d` (daemon mode) output logs to the terminal. Watch for any error-level messages.
+
+**CLI error patterns to watch for**:
+- `Failed to send terminal output - WebSocket is not connected`
+- `Error:` or `error:` prefixed messages
+- Stack traces or exceptions
+
+### Web Console Monitoring
+
+Open browser DevTools (F12) and monitor the Console and Network tabs during testing.
+
+**Web error patterns to watch for** (in WebSocket messages):
+- `{"type":"error","code":"CONNECTION_FAILED",...}` - Should NOT appear during normal reconnection
+- `{"type":"error","code":"SESSION_NOT_FOUND",...}` - Should NOT appear for valid sessions
+
+**Expected WebSocket messages during reconnection**:
+- `{"type":"cli:disconnected"}` - OK, indicates CLI temporarily disconnected
+- `{"type":"cli:reconnected",...}` - OK, indicates CLI reconnected
+- `{"type":"session:joined",...}` - OK, session join confirmation
+
+If any unexpected error messages appear, record them in the test results.
 
 ## Test Steps
 
@@ -25,7 +51,7 @@ Verify that CLI sessions remain running after web client disconnection and suppo
 npm install -g @always-coder/cli@latest
 always --version
 ```
-**Expected Result**: Version >= `1.1.1` is displayed
+**Expected Result**: Version >= `1.1.2` is displayed
 
 ### Step 2: Login to Server
 ```bash
@@ -54,6 +80,7 @@ Click on the session from Step 3 or scan the QR code
 **Expected Result**:
 - Successfully connected to terminal
 - Claude interface displayed
+- **CLI Log Check**: No error messages in CLI output
 
 ### Step 6: Complete a Conversation
 Enter a test prompt in the web terminal and wait for Claude's response
@@ -83,19 +110,35 @@ Close the browser tab directly or refresh the page
 **Expected Result**:
 - Successfully reconnected to the same session
 - Previous conversation history visible (depending on terminal buffer)
+- **CLI Log Check**: No error messages like "WebSocket is not connected" in CLI output
+- **Web Console Check**: No `CONNECTION_FAILED` or `SESSION_NOT_FOUND` errors in WebSocket messages
 
 ### Step 10: Continue Conversation
 Enter another prompt in the reconnected session
 
 **Expected Result**: Claude responds normally, session fully functional
 
-### Step 11: Stop Session
+### Step 11: Verify Logs
+Review both CLI terminal output and browser DevTools console from the entire test session.
+
+**CLI Expected Result**:
+- No `Error:` or `error:` level messages
+- No "WebSocket is not connected" errors
+- No stack traces or exceptions
+- Only expected log messages (connections, disconnections, etc.)
+
+**Web Console Expected Result**:
+- No `{"type":"error","code":"CONNECTION_FAILED",...}` messages
+- No `{"type":"error","code":"SESSION_NOT_FOUND",...}` messages
+- `cli:disconnected` and `cli:reconnected` messages are OK
+
+### Step 12: Stop Session
 ```bash
 always stop --all
 ```
 **Expected Result**: All daemon sessions stopped
 
-### Step 12: Delete Test User
+### Step 13: Delete Test User
 Delete the Cognito test user via AWS Console or CLI:
 ```bash
 aws cognito-idp admin-delete-user \
@@ -120,7 +163,11 @@ aws cognito-idp admin-delete-user \
 | Step 10 |  |  |
 | Step 11 |  |  |
 | Step 12 |  |  |
+| Step 13 |  |  |
 
 ## Related PRs
 - #28: feat: add InputFilter to prevent web clients from terminating CLI sessions
 - #30: fix: read CLI version from package.json instead of hardcoding
+- #31: fix: allow web clients to rejoin sessions when CLI temporarily disconnects
+- #33: fix: check WebSocket connection state before sending messages
+- #35: fix: handle stale CLI connections gracefully (this PR)
