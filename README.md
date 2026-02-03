@@ -187,7 +187,6 @@ MIT - See [LICENSE](LICENSE) file for details.
 
 - **Issues**: [GitHub Issues](https://github.com/tyyzqmf/always-coder/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/tyyzqmf/always-coder/discussions)
-- **Security**: Report security issues to security@always-coder.dev
 
 ## Acknowledgments
 
