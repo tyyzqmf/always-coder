@@ -1,113 +1,113 @@
-# Case001: Session 重连测试
+# Case001: Session Reconnection Test
 
-## 测试目的
-验证 CLI session 在 web 端断开连接后能够保持运行，并支持重新连接。
+## Test Objective
+Verify that CLI sessions remain running after web client disconnection and support reconnection.
 
-## 环境信息
+## Environment Information
 
-| 配置项 | 值 |
-|--------|-----|
+| Configuration | Value |
+|---------------|-------|
 | Web URL | `<YOUR_WEB_URL>` |
 | WebSocket | `<YOUR_WEBSOCKET_URL>` |
 | Cognito Region | `<YOUR_REGION>` |
-| CLI 版本 | >= 1.1.1 |
+| CLI Version | >= 1.1.1 |
 
-> 注意：部署完成后，可通过 `cd infra && pnpm cdk deploy --all` 输出获取实际地址
+> Note: After deployment, you can get the actual addresses from `cd infra && pnpm cdk deploy --all` output
 
-## 前置条件
-1. 已在 Cognito 中创建测试用户
+## Prerequisites
+1. Test user created in Cognito
 2. Node.js >= 20.0.0
 
-## 测试步骤
+## Test Steps
 
-### Step 1: 安装最新版 CLI
+### Step 1: Install Latest CLI
 ```bash
 npm install -g @always-coder/cli@latest
 always --version
 ```
-**预期结果**: 显示版本 >= `1.1.1`
+**Expected Result**: Version >= `1.1.1` is displayed
 
-### Step 2: 登录服务器
+### Step 2: Login to Server
 ```bash
 always login --server <YOUR_WEBSOCKET_URL>
 ```
-**预期结果**: 提示输入用户名和密码，登录成功后显示 "Login successful"
+**Expected Result**: Prompted for username and password, "Login successful" displayed after login
 
-### Step 3: 以 daemon 模式启动 Claude
+### Step 3: Start Claude in Daemon Mode
 ```bash
 always claude -d
 ```
-**预期结果**:
-- 显示 session ID 和连接信息
-- 显示 QR code
-- 显示 web 连接 URL
+**Expected Result**:
+- Session ID and connection info displayed
+- QR code displayed
+- Web connection URL displayed
 
-### Step 4: 浏览器访问 Web 端
-1. 打开浏览器访问 `<YOUR_WEB_URL>`
-2. 使用 Cognito 账户登录
+### Step 4: Access Web Client via Browser
+1. Open browser and navigate to `<YOUR_WEB_URL>`
+2. Login with Cognito account
 
-**预期结果**: 登录成功，显示 session 列表
+**Expected Result**: Login successful, session list displayed
 
-### Step 5: 连接 Session
-点击 Step 3 中显示的 session 或扫描 QR code
+### Step 5: Connect to Session
+Click on the session from Step 3 or scan the QR code
 
-**预期结果**:
-- 成功连接到终端
-- 显示 Claude 界面
+**Expected Result**:
+- Successfully connected to terminal
+- Claude interface displayed
 
-### Step 6: 完成一轮对话
-在 web 终端中输入测试提示词，等待 Claude 响应
+### Step 6: Complete a Conversation
+Enter a test prompt in the web terminal and wait for Claude's response
 
-**预期结果**: Claude 正常响应
+**Expected Result**: Claude responds normally
 
-### Step 7: 测试 Ctrl+C 信号过滤
-在 web 终端中按 `Ctrl+C`
+### Step 7: Test Ctrl+C Signal Filtering
+Press `Ctrl+C` in the web terminal
 
-**预期结果**:
-- CLI 端显示 "Blocked control signals from web: SIGINT"
-- Session 保持运行，不会终止
-- 可以继续输入
+**Expected Result**:
+- CLI displays "Blocked control signals from web: SIGINT"
+- Session remains running without termination
+- Can continue typing
 
-### Step 8: 关闭浏览器标签页
-直接关闭浏览器标签页或刷新页面
+### Step 8: Close Browser Tab
+Close the browser tab directly or refresh the page
 
-**预期结果**:
-- CLI 端 session 保持运行
-- 可以通过 `always list` 查看 session 仍然存在
+**Expected Result**:
+- CLI session remains running
+- Session still exists when checking with `always list`
 
-### Step 9: 重新连接 Session
-1. 重新打开浏览器访问 `<YOUR_WEB_URL>`
-2. 在 session 列表中找到之前的 session
-3. 点击连接
+### Step 9: Reconnect to Session
+1. Reopen browser and navigate to `<YOUR_WEB_URL>`
+2. Find the previous session in the session list
+3. Click to connect
 
-**预期结果**:
-- 成功重新连接到同一个 session
-- 可以看到之前的对话历史（取决于终端缓冲区）
+**Expected Result**:
+- Successfully reconnected to the same session
+- Previous conversation history visible (depending on terminal buffer)
 
-### Step 10: 继续对话
-在重新连接的 session 中继续输入提示词
+### Step 10: Continue Conversation
+Enter another prompt in the reconnected session
 
-**预期结果**: Claude 正常响应，session 功能完整
+**Expected Result**: Claude responds normally, session fully functional
 
-### Step 11: 停止 Session
+### Step 11: Stop Session
 ```bash
 always stop --all
 ```
-**预期结果**: 所有 daemon session 停止
+**Expected Result**: All daemon sessions stopped
 
-### Step 12: 删除测试用户
-通过 AWS Console 或 CLI 删除 Cognito 测试用户：
+### Step 12: Delete Test User
+Delete the Cognito test user via AWS Console or CLI:
 ```bash
 aws cognito-idp admin-delete-user \
   --user-pool-id <YOUR_USER_POOL_ID> \
   --username <TEST_USERNAME>
 ```
-**预期结果**: 测试用户已从 Cognito User Pool 中删除
+**Expected Result**: Test user deleted from Cognito User Pool
 
-## 测试结果
+## Test Results
 
-| 步骤 | 结果 | 备注 |
-|------|------|------|
+| Step | Result | Notes |
+|------|--------|-------|
 | Step 1 |  |  |
 | Step 2 |  |  |
 | Step 3 |  |  |
@@ -120,3 +120,7 @@ aws cognito-idp admin-delete-user \
 | Step 10 |  |  |
 | Step 11 |  |  |
 | Step 12 |  |  |
+
+## Related PRs
+- #28: feat: add InputFilter to prevent web clients from terminating CLI sessions
+- #30: fix: read CLI version from package.json instead of hardcoding
