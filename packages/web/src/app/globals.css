@@ -3,36 +3,51 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 169, 177, 214;
-  --background-rgb: 26, 27, 38;
+  /* VS Code Dark Modern theme colors */
+  --foreground-rgb: 204, 204, 204; /* #CCCCCC */
+  --background-rgb: 24, 24, 24; /* #181818 */
+  --terminal-bg: #181818;
+  --terminal-selection: #264F78;
+  --terminal-scrollbar: #333333;
+  --terminal-scrollbar-hover: #444444;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
-  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
 }
 
-/* xterm.js customization */
+/* xterm.js customization - VS Code Dark Modern */
 .xterm {
   padding: 8px;
+  height: 100% !important;
 }
 
+.xterm-screen {
+  height: 100% !important;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Scrollbar styling to match VS Code */
 .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 .xterm-viewport::-webkit-scrollbar-track {
-  background: #1a1b26;
+  background: var(--terminal-bg);
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #33467c;
-  border-radius: 4px;
+  background: var(--terminal-scrollbar);
+  border-radius: 5px;
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: #414868;
+  background: var(--terminal-scrollbar-hover);
 }
 
 /* Connection status indicator animation */
@@ -64,5 +79,5 @@ body {
 }
 
 #qr-reader__dashboard_section_swaplink {
-  color: #7aa2f7 !important;
+  color: #3B8EEA !important; /* VS Code bright blue */
 }
