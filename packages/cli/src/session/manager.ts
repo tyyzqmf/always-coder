@@ -12,6 +12,7 @@ import { EncryptionManager } from '../crypto/encryption.js';
 import { Terminal, type TerminalOptions } from '../pty/terminal.js';
 import { displayQRCode } from '../qrcode/generator.js';
 import { getWSEndpoint, getWebUrl, loadConfig } from '../config/index.js';
+import { ensureValidToken } from '../auth/cognito.js';
 import { saveDaemonSession, deleteDaemonSession, type DaemonSession } from '../daemon/index.js';
 import { getInstanceInfo, type InstanceInfo } from '../utils/instance.js';
 import chalk from 'chalk';
@@ -124,18 +125,23 @@ export class SessionManager extends EventEmitter {
   async start(): Promise<void> {
     const wsEndpoint = this.options.serverUrl || getWSEndpoint();
     const config = loadConfig();
-    const authToken = config.authToken;
+    const hadPreviousAuth = !!config.authToken;
+
+    // Ensure we have a valid token (refresh if expired)
+    const authToken = await ensureValidToken();
 
     this.log(chalk.blue('🚀 Starting Always Coder session...'));
     this.log(chalk.gray(`   Server: ${wsEndpoint}`));
     if (authToken) {
       this.log(chalk.gray('   Auth: Using configured token'));
+    } else if (hadPreviousAuth) {
+      this.log(chalk.yellow('   ⚠️  Session expired. Run "always login" to re-authenticate.'));
     }
 
     // Connect to WebSocket server with optional auth token
     this.wsClient = new WebSocketClient({
       endpoint: wsEndpoint,
-      authToken,
+      authToken: authToken ?? undefined,
     });
     this.setupWebSocketHandlers();
 
