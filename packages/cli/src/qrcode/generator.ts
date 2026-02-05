@@ -6,13 +6,14 @@ import { getWebUrl as getWebUrlFromConfig } from '../config/index.js';
  * Generate and display QR code in terminal
  */
 export function displayQRCode(data: QRCodeData): void {
-  const jsonData = JSON.stringify(data);
+  // Use URL instead of JSON so phone cameras can directly open the link
+  const webUrl = getWebUrl(data);
 
   console.log('\n');
-  console.log('📱 Scan this QR code with Always Coder Web to connect:');
+  console.log('📱 Scan this QR code to connect:');
   console.log('');
 
-  qrcode.generate(jsonData, { small: true }, (qrString) => {
+  qrcode.generate(webUrl, { small: true }, (qrString) => {
     console.log(qrString);
   });
 
@@ -20,7 +21,7 @@ export function displayQRCode(data: QRCodeData): void {
   console.log(`Session ID: ${data.sessionId}`);
   console.log('');
   console.log('Or open this URL in your browser:');
-  console.log(`${getWebUrl(data)}`);
+  console.log(`${webUrl}`);
   console.log('');
 }
 
@@ -33,13 +34,3 @@ export function getWebUrl(data: QRCodeData): string {
   return `${baseUrl}/session?id=${data.sessionId}&key=${encodeURIComponent(data.publicKey)}`;
 }
 
-/**
- * Display session info without QR code
- */
-export function displaySessionInfo(sessionId: string, publicKey: string): void {
-  console.log('\n');
-  console.log('🔗 Session Information:');
-  console.log(`   Session ID: ${sessionId}`);
-  console.log(`   Public Key: ${publicKey.substring(0, 20)}...`);
-  console.log('');
-}

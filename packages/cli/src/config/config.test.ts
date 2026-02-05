@@ -6,6 +6,7 @@ vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  chmodSync: vi.fn(),
 }));
 
 // Mock os module
@@ -310,6 +311,143 @@ describe('Config Module', () => {
       const { getWebUrl } = await import('./index.js');
 
       expect(() => getWebUrl()).toThrow('Web URL not configured');
+    });
+  });
+
+  describe('validateAndNormalizeUrl', () => {
+    it('should pass through valid https URL', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      const result = validateAndNormalizeUrl('https://example.com');
+      expect(result).toBe('https://example.com');
+    });
+
+    it('should add https if no protocol specified', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      const result = validateAndNormalizeUrl('example.com');
+      expect(result).toBe('https://example.com');
+    });
+
+    it('should remove trailing slashes', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      const result = validateAndNormalizeUrl('https://example.com///');
+      expect(result).toBe('https://example.com');
+    });
+
+    it('should trim whitespace', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      const result = validateAndNormalizeUrl('  https://example.com  ');
+      expect(result).toBe('https://example.com');
+    });
+
+    it('should throw error for empty URL', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      expect(() => validateAndNormalizeUrl('')).toThrow('URL cannot be empty');
+      expect(() => validateAndNormalizeUrl('   ')).toThrow('URL cannot be empty');
+    });
+
+    it('should throw error for invalid URL format', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      expect(() => validateAndNormalizeUrl('not a valid url')).toThrow('Invalid URL format');
+    });
+
+    it('should accept http URLs', async () => {
+      const { validateAndNormalizeUrl } = await import('./index.js');
+      const result = validateAndNormalizeUrl('http://localhost:3000');
+      expect(result).toBe('http://localhost:3000');
+    });
+  });
+
+  describe('saveServerConfig', () => {
+    it('should save server configuration', async () => {
+      vi.mocked(existsSync).mockImplementation((path: unknown) => {
+        if (String(path).includes('config.local.json')) return false;
+        return true;
+      });
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          server: '',
+          webUrl: '',
+        })
+      );
+      vi.mocked(writeFileSync).mockReturnValue(undefined);
+
+      const { saveServerConfig } = await import('./index.js');
+      saveServerConfig({
+        server: 'wss://api.example.com/prod',
+        webUrl: 'https://app.example.com',
+        cognito: {
+          userPoolId: 'us-east-1_xxx',
+          clientId: 'xxxxxxxxxx',
+          region: 'us-east-1',
+        },
+      });
+
+      expect(writeFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('"server": "wss://api.example.com/prod"')
+      );
+      expect(writeFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('"webUrl": "https://app.example.com"')
+      );
+      expect(writeFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('"cognitoUserPoolId": "us-east-1_xxx"')
+      );
+    });
+  });
+
+  describe('isServerConfigured', () => {
+    it('should return true when all required fields are set', async () => {
+      vi.mocked(existsSync).mockImplementation((path: unknown) => {
+        if (String(path).includes('config.local.json')) return false;
+        return true;
+      });
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          server: 'wss://api.example.com',
+          webUrl: 'https://app.example.com',
+          cognitoUserPoolId: 'us-east-1_xxx',
+          cognitoClientId: 'xxxxxxxxxx',
+        })
+      );
+
+      const { isServerConfigured } = await import('./index.js');
+      expect(isServerConfigured()).toBe(true);
+    });
+
+    it('should return false when server is missing', async () => {
+      vi.mocked(existsSync).mockImplementation((path: unknown) => {
+        if (String(path).includes('config.local.json')) return false;
+        return true;
+      });
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          server: '',
+          webUrl: 'https://app.example.com',
+          cognitoUserPoolId: 'us-east-1_xxx',
+          cognitoClientId: 'xxxxxxxxxx',
+        })
+      );
+
+      const { isServerConfigured } = await import('./index.js');
+      expect(isServerConfigured()).toBe(false);
+    });
+
+    it('should return false when cognito config is missing', async () => {
+      vi.mocked(existsSync).mockImplementation((path: unknown) => {
+        if (String(path).includes('config.local.json')) return false;
+        return true;
+      });
+      vi.mocked(readFileSync).mockReturnValue(
+        JSON.stringify({
+          server: 'wss://api.example.com',
+          webUrl: 'https://app.example.com',
+        })
+      );
+
+      const { isServerConfigured } = await import('./index.js');
+      expect(isServerConfigured()).toBe(false);
     });
   });
 });

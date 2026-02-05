@@ -5,6 +5,10 @@ import {
   isSessionCreateRequest,
   isSessionReconnectRequest,
   isSessionJoinRequest,
+  isSessionListRequest,
+  isSessionInfoRequest,
+  isSessionUpdateRequest,
+  isSessionDeleteRequest,
   PROTOCOL,
   ErrorCodes,
 } from './messages.js';
@@ -254,6 +258,155 @@ describe('isSessionJoinRequest', () => {
         publicKey: 'key',
       })
     ).toBe(false);
+  });
+});
+
+describe('isSessionListRequest', () => {
+  it('should return true for valid session list request', () => {
+    const request = {
+      type: MessageType.SESSION_LIST_REQUEST,
+    };
+
+    expect(isSessionListRequest(request)).toBe(true);
+  });
+
+  it('should return true with optional includeInactive', () => {
+    const request = {
+      type: MessageType.SESSION_LIST_REQUEST,
+      includeInactive: true,
+    };
+
+    expect(isSessionListRequest(request)).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isSessionListRequest(null)).toBe(false);
+  });
+
+  it('should return false for wrong message type', () => {
+    const request = {
+      type: MessageType.SESSION_CREATE,
+    };
+
+    expect(isSessionListRequest(request)).toBe(false);
+  });
+});
+
+describe('isSessionInfoRequest', () => {
+  it('should return true for valid session info request', () => {
+    const request = {
+      type: MessageType.SESSION_INFO_REQUEST,
+      sessionId: 'ABC123',
+    };
+
+    expect(isSessionInfoRequest(request)).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isSessionInfoRequest(null)).toBe(false);
+  });
+
+  it('should return false for wrong message type', () => {
+    const request = {
+      type: MessageType.SESSION_CREATE,
+      sessionId: 'ABC123',
+    };
+
+    expect(isSessionInfoRequest(request)).toBe(false);
+  });
+
+  it('should return false for missing sessionId', () => {
+    const request = {
+      type: MessageType.SESSION_INFO_REQUEST,
+    };
+
+    expect(isSessionInfoRequest(request)).toBe(false);
+  });
+
+  it('should return false for wrong sessionId type', () => {
+    const request = {
+      type: MessageType.SESSION_INFO_REQUEST,
+      sessionId: 123,
+    };
+
+    expect(isSessionInfoRequest(request)).toBe(false);
+  });
+});
+
+describe('isSessionUpdateRequest', () => {
+  it('should return true for valid session update request', () => {
+    const request = {
+      type: MessageType.SESSION_UPDATE,
+    };
+
+    expect(isSessionUpdateRequest(request)).toBe(true);
+  });
+
+  it('should return true with optional fields', () => {
+    const request = {
+      type: MessageType.SESSION_UPDATE,
+      instanceId: 'inst-123',
+      instanceLabel: 'My Instance',
+      hostname: 'server.local',
+      command: 'bash',
+      commandArgs: ['-i'],
+      webUrl: 'https://example.com',
+    };
+
+    expect(isSessionUpdateRequest(request)).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isSessionUpdateRequest(null)).toBe(false);
+  });
+
+  it('should return false for wrong message type', () => {
+    const request = {
+      type: MessageType.SESSION_CREATE,
+    };
+
+    expect(isSessionUpdateRequest(request)).toBe(false);
+  });
+});
+
+describe('isSessionDeleteRequest', () => {
+  it('should return true for valid session delete request', () => {
+    const request = {
+      type: MessageType.SESSION_DELETE_REQUEST,
+      sessionId: 'ABC123',
+    };
+
+    expect(isSessionDeleteRequest(request)).toBe(true);
+  });
+
+  it('should return false for null', () => {
+    expect(isSessionDeleteRequest(null)).toBe(false);
+  });
+
+  it('should return false for wrong message type', () => {
+    const request = {
+      type: MessageType.SESSION_CREATE,
+      sessionId: 'ABC123',
+    };
+
+    expect(isSessionDeleteRequest(request)).toBe(false);
+  });
+
+  it('should return false for missing sessionId', () => {
+    const request = {
+      type: MessageType.SESSION_DELETE_REQUEST,
+    };
+
+    expect(isSessionDeleteRequest(request)).toBe(false);
+  });
+
+  it('should return false for wrong sessionId type', () => {
+    const request = {
+      type: MessageType.SESSION_DELETE_REQUEST,
+      sessionId: 123,
+    };
+
+    expect(isSessionDeleteRequest(request)).toBe(false);
   });
 });
 

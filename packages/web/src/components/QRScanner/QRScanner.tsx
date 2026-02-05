@@ -37,7 +37,27 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
           },
           (decodedText) => {
             try {
-              const data = JSON.parse(decodedText) as QRCodeData;
+              let data: QRCodeData;
+
+              // Try to parse as URL first (new format)
+              if (decodedText.startsWith('http://') || decodedText.startsWith('https://')) {
+                const url = new URL(decodedText);
+                const sessionId = url.searchParams.get('id');
+                const publicKey = url.searchParams.get('key');
+
+                if (!sessionId || !publicKey) {
+                  throw new Error('Invalid URL parameters');
+                }
+
+                data = {
+                  sessionId,
+                  publicKey,
+                  wsEndpoint: '', // Not needed for URL format
+                };
+              } else {
+                // Fallback to JSON format (legacy)
+                data = JSON.parse(decodedText) as QRCodeData;
+              }
 
               // Validate data structure
               if (!data.sessionId || !data.publicKey) {
