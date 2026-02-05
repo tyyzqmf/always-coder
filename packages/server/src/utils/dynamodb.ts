@@ -260,20 +260,3 @@ export async function getRecentMessages(
   return (result.Items as CachedMessage[]) || [];
 }
 
-export async function getMessagesSince(
-  sessionId: string,
-  sinceSeq: number
-): Promise<CachedMessage[]> {
-  const input: QueryCommandInput = {
-    TableName: MESSAGES_TABLE,
-    KeyConditionExpression: 'sessionId = :sid AND seq > :seq',
-    ExpressionAttributeValues: {
-      ':sid': sessionId,
-      ':seq': sinceSeq,
-    },
-    ScanIndexForward: true,
-  };
-
-  const result = await docClient.send(new QueryCommand(input));
-  return (result.Items as CachedMessage[]) || [];
-}

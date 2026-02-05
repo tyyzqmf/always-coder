@@ -34,13 +34,3 @@ export function getWebUrl(data: QRCodeData): string {
   return `${baseUrl}/session?id=${data.sessionId}&key=${encodeURIComponent(data.publicKey)}`;
 }
 
-/**
- * Display session info without QR code
- */
-export function displaySessionInfo(sessionId: string, publicKey: string): void {
-  console.log('\n');
-  console.log('🔗 Session Information:');
-  console.log(`   Session ID: ${sessionId}`);
-  console.log(`   Public Key: ${publicKey.substring(0, 20)}...`);
-  console.log('');
-}
