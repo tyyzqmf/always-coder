@@ -7,7 +7,8 @@
 
 import WebSocket from 'ws';
 import { MessageType, type RemoteSessionInfo } from '@always-coder/shared';
-import { getWSEndpoint, loadConfig } from '../config/index.js';
+import { getWSEndpoint } from '../config/index.js';
+import { ensureValidToken } from '../auth/cognito.js';
 
 /**
  * Timeout for remote session queries (ms)
@@ -23,9 +24,10 @@ const QUERY_TIMEOUT = 10000;
 export async function fetchRemoteSessions(
   includeInactive: boolean = false
 ): Promise<RemoteSessionInfo[]> {
-  const config = loadConfig();
+  // Ensure we have a valid token (refresh if expired)
+  const authToken = await ensureValidToken();
 
-  if (!config.authToken) {
+  if (!authToken) {
     throw new Error('Not logged in. Run "always login" to authenticate.');
   }
 
@@ -38,7 +40,7 @@ export async function fetchRemoteSessions(
     }, QUERY_TIMEOUT);
 
     // Connect with auth token
-    const url = `${wsEndpoint}?token=${encodeURIComponent(config.authToken!)}`;
+    const url = `${wsEndpoint}?token=${encodeURIComponent(authToken)}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -92,9 +94,10 @@ export async function fetchRemoteSessions(
 export async function fetchRemoteSessionInfo(
   sessionId: string
 ): Promise<RemoteSessionInfo | null> {
-  const config = loadConfig();
+  // Ensure we have a valid token (refresh if expired)
+  const authToken = await ensureValidToken();
 
-  if (!config.authToken) {
+  if (!authToken) {
     throw new Error('Not logged in. Run "always login" to authenticate.');
   }
 
@@ -107,7 +110,7 @@ export async function fetchRemoteSessionInfo(
     }, QUERY_TIMEOUT);
 
     // Connect with auth token
-    const url = `${wsEndpoint}?token=${encodeURIComponent(config.authToken!)}`;
+    const url = `${wsEndpoint}?token=${encodeURIComponent(authToken)}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {

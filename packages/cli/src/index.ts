@@ -386,35 +386,48 @@ program
         username = await question(chalk.cyan('Username or Email: '));
       }
 
+      // Close readline before switching to raw mode for password
+      // This prevents readline from interfering with raw mode input
+      rl.close();
+
       if (!password) {
-        // Hide password input
+        // Hide password input using raw mode
         process.stdout.write(chalk.cyan('Password: '));
         password = await new Promise((resolve) => {
           let pwd = '';
-          process.stdin.setRawMode(true);
+          // Ensure stdin is in the right state for raw mode
+          if (process.stdin.isTTY) {
+            process.stdin.setRawMode(true);
+          }
           process.stdin.resume();
           process.stdin.on('data', function handler(char: Buffer) {
             const c = char.toString();
             if (c === '\n' || c === '\r') {
-              process.stdin.setRawMode(false);
+              if (process.stdin.isTTY) {
+                process.stdin.setRawMode(false);
+              }
               process.stdin.pause();
               process.stdin.removeListener('data', handler);
               console.log('');
               resolve(pwd);
             } else if (c === '\u0003') {
               // Ctrl+C
+              if (process.stdin.isTTY) {
+                process.stdin.setRawMode(false);
+              }
               process.exit();
-            } else if (c === '\u007f') {
-              // Backspace
-              pwd = pwd.slice(0, -1);
-            } else {
+            } else if (c === '\u007f' || c === '\b') {
+              // Backspace (both DEL and BS characters)
+              if (pwd.length > 0) {
+                pwd = pwd.slice(0, -1);
+              }
+            } else if (c.charCodeAt(0) >= 32) {
+              // Only add printable characters
               pwd += c;
             }
           });
         });
       }
-
-      rl.close();
 
       // Validate credentials
       if (!username || username.trim().length === 0) {
